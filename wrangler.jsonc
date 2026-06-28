@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pantry-worker",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pantry-db",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "PANTRY_OWNER": "default"
+  }
+  // PANTRY_TOKEN is a secret, set with: wrangler secret put PANTRY_TOKEN
+  // For local dev put it in .dev.vars (gitignored).
+}

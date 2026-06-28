@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.DS_Store
+coverage/
+build/
+dist/
+.wrangler/
+.alchemy/
+.dev.vars
+.env
+*.local
