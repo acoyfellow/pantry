@@ -1,6 +1,28 @@
 # pantry
 
-A small Cloudflare Worker and D1 store of recipes, so an agent can reuse a saved recipe instead of re-deriving the same pattern.
+<p align="center">
+  <img src=".github/assets/hero.jpg" alt="Glass jars of saved recipes on a warm wooden shelf" width="440" />
+</p>
+
+<p align="center">
+  <strong>A shelf of saved recipes for agents.</strong><br />
+  A small Cloudflare Worker and D1 store, so an agent can reuse a saved recipe instead of re-deriving the same pattern.
+</p>
+
+<p align="center">
+  <a href="https://pantry.coey.dev">Live</a> &middot;
+  <a href="https://pantry.coey.dev/docs">Docs</a> &middot;
+  <a href="https://pantry.coey.dev/proof">Proof</a>
+</p>
+
+<p align="center">
+  <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white" />
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-Bun-000?logo=bun&logoColor=white" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-50%20passing-3fb950" />
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
+</p>
+
+> **TL;DR** — A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is structural: a recurring task becomes `get(name)` plus a local run, spending **0 model tokens regenerating the saved code**.
 
 ## What It Is
 
@@ -38,7 +60,7 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `status` is `"enabled"` or `"disabled"`. Anything other than `"disabled"` becomes `"enabled"`.
 - `sourceRunId` is an optional string, otherwise `null`.
 
-The `code` field is a function body, not a module. It receives a single `ctx` object and returns a plain value. The sample in `examples/sample-recipe.ts` reads `ctx.input.text` and returns `{ slug }`.
+The `code` field receives a single `ctx` object and returns a plain value. The demo runner accepts the shapes an agent naturally authors: a bare function body that reads `ctx`, an `export default (ctx) => ...` (or `export default function`), or a `module.exports = ...`. The sample in `examples/sample-recipe.ts` reads `ctx.input.text` and returns `{ slug }`.
 
 ## How To Use It
 
@@ -57,7 +79,7 @@ The Worker fails closed. With no `PANTRY_TOKEN` configured, every authenticated 
 
 ## The API
 
-All routes except `/health` and `OPTIONS` require `Authorization: Bearer <PANTRY_TOKEN>`. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` are set in your shell.
+The public instance lives at `https://pantry.coey.dev` (gated; the only open route is `/health`). All routes except `/health` and `OPTIONS` require `Authorization: Bearer <PANTRY_TOKEN>`. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` are set in your shell.
 
 ### `GET /health`
 
@@ -218,7 +240,7 @@ A recipe saves model tokens only for a recurring pattern. When a pattern repeats
 
 There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
 
-This repository ships no measured token numbers. The saving depends on how often a pattern recurs and how large the re-reasoning would have been, neither of which pantry measures. Treat the mechanism as the claim, not a benchmark.
+The honest claim is structural, not a benchmark: a model can re-derive a recurring procedure every time and may be wrong, while pantry hands back exact saved code and spends 0 model tokens regenerating it. The `evals/` harness measures the pantry path and the tokenizer-counted payload sizes of the from-scratch alternatives; it can also call a real model when `LIVE_MODEL=1` and a provider is reachable, recording provider-reported token usage and scoring correctness for every arm. Without a reachable provider it stays in a clearly labeled estimate mode and fabricates nothing. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
 
 ## Layout
 
