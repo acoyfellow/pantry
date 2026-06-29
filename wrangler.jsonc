@@ -2,14 +2,20 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pantry-worker",
   "main": "src/worker.ts",
+  "account_id": "bfcb6ac5b3ceaf42a09607f6f7925823",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Only public surface is the gated custom domain; no workers.dev URL.
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "pantry.coey.dev", "custom_domain": true }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "pantry-db",
-      "database_id": "local",
+      "database_id": "40cd8070-e6d1-4e6a-aeea-a0cf0db9fe9a",
       "migrations_dir": "migrations"
     }
   ],
