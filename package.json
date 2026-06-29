@@ -6,7 +6,8 @@
   "description": "A capability-scoped recipe store on Cloudflare Workers + D1. It stores and hands back scripts; it never runs them.",
   "exports": {
     ".": "./src/client.ts",
-    "./recipe": "./src/recipe.ts"
+    "./recipe": "./src/recipe.ts",
+    "./opencode": "./extensions/opencode/index.ts"
   },
   "scripts": {
     "dev": "wrangler dev",
@@ -24,7 +25,8 @@
     "@types/bun": "latest",
     "alchemy": "^0.93.12",
     "typescript": "^5.9.2",
-    "wrangler": "^4.102.0"
+    "wrangler": "^4.102.0",
+    "@opencode-ai/plugin": "1.4.6"
   },
   "dependencies": {
     "hono": "^4.12.25"
@@ -33,5 +35,16 @@
   "license": "MIT",
   "engines": {
     "node": ">=22"
+  },
+  "bin": {
+    "pantry": "./bin/pantry"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
   }
 }

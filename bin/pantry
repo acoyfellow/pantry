@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const args = [join(root, 'src', 'cli.ts'), ...process.argv.slice(2)];
+const runner = spawnSync('bun', args, { stdio: 'inherit' });
+if (runner.error && runner.error.code === 'ENOENT') {
+  const node = spawnSync(process.execPath, ['--import', 'tsx', ...args], { stdio: 'inherit' });
+  if (node.error) throw node.error;
+  process.exit(node.status ?? 1);
+}
+if (runner.error) throw runner.error;
+process.exit(runner.status ?? 1);
