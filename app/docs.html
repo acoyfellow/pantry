@@ -34,6 +34,17 @@
       }
     </script>
 
+    <script>
+      (() => {
+        const key = "pantry-theme";
+        const root = document.documentElement;
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const stored = localStorage.getItem(key);
+        const theme = stored === "light" || stored === "dark" ? stored : systemDark ? "dark" : "light";
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+      })();
+    </script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body class="docs">
@@ -45,7 +56,12 @@
         </a>
         <div class="navlinks">
           <a href="/">Home</a>
+          <a href="/proof">Proof</a>
           <a href="https://github.com/acoyfellow/pantry">GitHub</a>
+          <button class="theme-toggle" type="button" aria-label="Switch color theme" data-theme-toggle>
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+          </button>
         </div>
       </nav>
     </header>
@@ -298,9 +314,7 @@ if (recipe) {
             saved recipe to reuse.
           </p>
           <p>
-            This project ships no measured token numbers. The saving depends on how often a pattern
-            recurs and how large the re-reasoning would have been, neither of which pantry
-            measures. Treat the mechanism as the claim, not a benchmark.
+            The proof page shows the current local eval. It labels prompt-side token counts as estimates because no live model API was called, and it labels pantry execution time and correctness as measured local deterministic work. The mechanism is still the claim: <code>pantry.get(name)</code> plus a local run avoids model re-derivation for the saved procedure. <a href="/proof">Read the proof</a>.
           </p>
         </section>
 
@@ -322,10 +336,33 @@ if (recipe) {
     <footer class="wrap site-foot">
       <p>
         <a href="/">Home</a> ·
+        <a href="/proof">Proof</a> ·
         <a href="https://github.com/acoyfellow/pantry">GitHub</a> ·
         <a href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
       </p>
       <p class="muted">Built by Jordan Coeyman on Cloudflare Workers and D1.</p>
     </footer>
+    <script>
+      (() => {
+        const key = "pantry-theme";
+        const button = document.querySelector("[data-theme-toggle]");
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const apply = (theme, persist) => {
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+          button?.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
+          if (persist) localStorage.setItem(key, theme);
+        };
+        const stored = localStorage.getItem(key);
+        if (stored !== "light" && stored !== "dark") apply(media.matches ? "dark" : "light", false);
+        button?.addEventListener("click", () => {
+          apply(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+        });
+        media.addEventListener("change", (event) => {
+          const storedTheme = localStorage.getItem(key);
+          if (storedTheme !== "light" && storedTheme !== "dark") apply(event.matches ? "dark" : "light", false);
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pantry — proof</title>
+    <meta
+      name="description"
+      content="A bounded, reproducible pantry eval comparing prompt-from-scratch, inline procedure prompts, and saved recipe reuse on recurring tasks."
+    />
+    <link rel="canonical" href="https://pantry.coey.dev/proof" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content="pantry — proof" />
+    <meta property="og:description" content="Measured deterministic recipe reuse, labeled estimates for prompt-side token counts, and the limits of the claim." />
+    <meta property="og:url" content="https://pantry.coey.dev/proof" />
+    <meta property="og:type" content="article" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "pantry recurring recipe reuse eval",
+        "description": "Reproducible local eval comparing recurring task techniques. No live model API was called; estimates are labeled.",
+        "url": "https://pantry.coey.dev/proof",
+        "creator": { "@type": "Person", "name": "Jordan Coeyman", "url": "https://coey.dev" },
+        "isBasedOn": "https://github.com/acoyfellow/pantry/tree/main/evals"
+      }
+    </script>
+    <script>
+      (() => {
+        const key = "pantry-theme";
+        const root = document.documentElement;
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const stored = localStorage.getItem(key);
+        const theme = stored === "light" || stored === "dark" ? stored : systemDark ? "dark" : "light";
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="docs">
+    <header class="wrap">
+      <nav class="topnav">
+        <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>pantry</a>
+        <div class="navlinks">
+          <a href="/">Home</a>
+          <a href="/docs">Docs</a>
+          <a href="https://github.com/acoyfellow/pantry">GitHub</a>
+          <button class="theme-toggle" type="button" aria-label="Switch color theme" data-theme-toggle>
+            <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+            <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-body">
+      <aside class="toc">
+        <p class="eyebrow">[ proof ]</p>
+        <ul>
+          <li><a href="#result">Result</a></li>
+          <li><a href="#method">Method</a></li>
+          <li><a href="#numbers">Numbers</a></li>
+          <li><a href="#limits">Limits</a></li>
+        </ul>
+      </aside>
+      <article class="doc-content">
+        <h1>Proof, with labels.</h1>
+        <p class="lede">
+          pantry's claim is bounded: for recurring work, a saved recipe lets the agent fetch and run known code instead of spending model tokens re-deriving the procedure.
+        </p>
+
+        <section id="result">
+          <h2>Headline from this repo's eval</h2>
+          <p>
+            The local harness covered four recurring tasks. It estimated prompt-from-scratch at <strong>2,245 tokens</strong>, inline procedure prompts at <strong>2,076 tokens</strong>, and pantry discovery at <strong>411 tokens</strong>. Pantry recipe execution used <strong>0 model tokens for the saved code path</strong>, measured <strong>0 ms total</strong> at millisecond resolution on this machine, and passed <strong>4 of 4</strong> deterministic correctness checks.
+          </p>
+          <p class="note">Those token counts are estimates, not provider usage. The pantry wall-clock and correctness values are measured locally.</p>
+        </section>
+
+        <section id="method">
+          <h2>What was measured</h2>
+          <p>
+            The harness in <code>evals/run.ts</code> uses real recipes: <code>slugify</code>, <code>verify_live_worker</code>, <code>deploy_coey_worker</code>, and one deterministic JSON transform. For pantry reuse it runs the saved recipe code locally, records wall-clock milliseconds, and checks the output.
+          </p>
+          <p>
+            No live model API was called. Prompt-from-scratch and inline-tool-def-each-time token counts are transparent estimates from actual prompt and procedure text using <code>ceil(characters / 4)</code>. Pantry discovery tokens use the same estimate on the actual list-entry text. The saved recipe code path itself spends 0 model reasoning tokens.
+          </p>
+        </section>
+
+        <section id="numbers">
+          <h2>Numbers</h2>
+          <table class="proof-table">
+            <thead><tr><th>Technique</th><th>Tokens</th><th>Token basis</th><th>Measured ms</th><th>Correctness</th></tr></thead>
+            <tbody>
+              <tr><td>prompt-from-scratch</td><td>2,245</td><td>estimated</td><td>not measured</td><td>not measured</td></tr>
+              <tr><td>inline-tool-def-each-time</td><td>2,076</td><td>estimated</td><td>not measured</td><td>not measured</td></tr>
+              <tr><td>pantry-reuse</td><td>411</td><td>estimated discovery only</td><td>0</td><td>4 / 4 measured pass</td></tr>
+            </tbody>
+          </table>
+          <p>
+            Reproduce with <code>bun run evals</code>. The machine-readable file is <code>evals/results.json</code> in the repo.
+          </p>
+        </section>
+
+        <section id="limits">
+          <h2>Limits</h2>
+          <ul>
+            <li>This applies to recurring patterns with a saved recipe. Novel work still needs reasoning.</li>
+            <li>There is always discovery cost. The agent must inspect recipe names, descriptions, schemas, and capabilities.</li>
+            <li>The token estimator is approximate. A real provider tokenizer and model output would differ.</li>
+            <li>Local deterministic wall-clock is not network latency and not a live model benchmark.</li>
+            <li>pantry stores and hands back code. Running fetched code remains the caller's trust decision.</li>
+          </ul>
+        </section>
+      </article>
+    </main>
+
+    <footer class="wrap site-foot">
+      <p><a href="/">Home</a> · <a href="/docs">Docs</a> · <a href="https://github.com/acoyfellow/pantry">GitHub</a> · <a href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a></p>
+      <p class="muted">Built by Jordan Coeyman on Cloudflare Workers and D1.</p>
+    </footer>
+    <script>
+      (() => {
+        const key = "pantry-theme";
+        const button = document.querySelector("[data-theme-toggle]");
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+        const apply = (theme, persist) => {
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+          button?.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
+          if (persist) localStorage.setItem(key, theme);
+        };
+        const stored = localStorage.getItem(key);
+        if (stored !== "light" && stored !== "dark") apply(media.matches ? "dark" : "light", false);
+        button?.addEventListener("click", () => apply(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true));
+        media.addEventListener("change", (event) => {
+          const storedTheme = localStorage.getItem(key);
+          if (storedTheme !== "light" && storedTheme !== "dark") apply(event.matches ? "dark" : "light", false);
+        });
+      })();
+    </script>
+  </body>
+</html>

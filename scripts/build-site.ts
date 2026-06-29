@@ -27,10 +27,12 @@ for (const name of sources) {
   cpSync(from, join(distDir, name));
 }
 
-// Pretty path: serve /docs as docs/index.html so the assets binding resolves
-// the extensionless URL without a trailing-slash redirect.
+// Pretty paths: serve /docs and /proof as */index.html so the assets binding
+// resolves extensionless URLs without a trailing-slash redirect.
 mkdirSync(join(distDir, 'docs'), { recursive: true });
 cpSync(join(appDir, 'docs.html'), join(distDir, 'docs', 'index.html'));
+mkdirSync(join(distDir, 'proof'), { recursive: true });
+cpSync(join(appDir, 'proof.html'), join(distDir, 'proof', 'index.html'));
 
 const built = readdirSync(distDir);
 console.log(`built app/dist: ${built.join(', ')}`);
