@@ -6,10 +6,10 @@ import { RUN_CAVEAT, describeError, makeClient } from './surface.ts';
 const HELP = `pantry — reuse capability-scoped recipes from any harness.
 
 Usage:
-  pantry list [--json]
+  pantry list [--shared] [--json]
   pantry get <name> [--json]
   pantry run <name> [--input <json>|@file|-] [--json]
-  pantry push <file.json> [--json]
+  pantry push <file.json> [--shared] [--json]
 
 Config: PANTRY_URL defaults to https://pantry.coey.dev. PANTRY_TOKEN comes from env or ~/.terrarium/pantry-token.secret.
 `;
@@ -40,7 +40,7 @@ function rows(recipes: { name: string; description?: string; capabilities?: stri
 }
 
 export async function main(): Promise<void> {
-  const argv = process.argv.slice(2).filter((a) => a !== '--json');
+  const argv = process.argv.slice(2).filter((a) => a !== '--json' && a !== '--shared');
   const [cmd, arg] = argv;
   const asJson = has('--json');
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
@@ -50,7 +50,7 @@ export async function main(): Promise<void> {
   const { client, url } = makeClient();
   try {
     if (cmd === 'list') {
-      const recipes = await client.list();
+      const recipes = await client.list(has('--shared') ? { scope: 'shared' } : undefined);
       asJson ? json({ recipes }) : console.log(rows(recipes));
       return;
     }
@@ -75,7 +75,9 @@ export async function main(): Promise<void> {
     }
     if (cmd === 'push') {
       if (!arg) throw new Error('usage: pantry push <file.json>');
-      const saved = await client.push(JSON.parse(readFileSync(arg, 'utf8')));
+      const recipe = JSON.parse(readFileSync(arg, 'utf8'));
+      if (has('--shared')) recipe.visibility = 'shared';
+      const saved = await client.push(recipe);
       asJson ? json({ saved }) : console.log(`Pushed '${saved.name}' v${saved.version} to ${url}.`);
       return;
     }

@@ -117,8 +117,8 @@ app.post('/recipes', async (c) => {
     const id = crypto.randomUUID();
 
     await c.env.DB.prepare(
-      `INSERT INTO recipes (id, owner, name, description, input_schema_json, code, capabilities_json, status, version, source_run_id, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO recipes (id, owner, name, description, input_schema_json, code, capabilities_json, status, version, source_run_id, visibility, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(owner, name) DO UPDATE SET
          description = excluded.description,
          input_schema_json = excluded.input_schema_json,
@@ -127,6 +127,7 @@ app.post('/recipes', async (c) => {
          status = excluded.status,
          version = excluded.version,
          source_run_id = excluded.source_run_id,
+         visibility = excluded.visibility,
          updated_at = excluded.updated_at`,
     )
       .bind(
@@ -140,6 +141,7 @@ app.post('/recipes', async (c) => {
         parsed.status,
         version,
         parsed.sourceRunId,
+        parsed.visibility,
         createdAt,
         now,
       )
@@ -152,8 +154,16 @@ app.post('/recipes', async (c) => {
 });
 
 // GET /recipes — list WITHOUT code. Cheap discovery.
+// Default scope is owner-only. ?scope=shared lists opt-in shared recipes from all owners.
 app.get('/recipes', async (c) => {
   const owner = c.get('owner');
+  const scope = c.req.query('scope');
+  if (scope === 'shared') {
+    const { results = [] } = await c.env.DB.prepare(
+      "SELECT * FROM recipes WHERE visibility = 'shared' ORDER BY updated_at DESC",
+    ).all<RecipeRow>();
+    return c.json({ recipes: results.map(listEntry) });
+  }
   const { results = [] } = await c.env.DB.prepare(
     'SELECT * FROM recipes WHERE owner = ? ORDER BY updated_at DESC',
   )
@@ -163,13 +173,20 @@ app.get('/recipes', async (c) => {
 });
 
 // GET /recipe/:name — full recipe INCLUDING code. The fetch a caller runs.
+// Resolution is deterministic: your own recipe wins, then the most recently updated shared recipe.
 app.get('/recipe/:name', async (c) => {
   const owner = c.get('owner');
-  const row = await c.env.DB.prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
+  const own = await c.env.DB.prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
     .bind(owner, c.req.param('name'))
     .first<RecipeRow>();
-  if (!row) return handleError(new RecipeError('NotFound', 'recipe not found'));
-  return c.json(fullRecipe(row));
+  if (own) return c.json(fullRecipe(own));
+  const shared = await c.env.DB.prepare(
+    "SELECT * FROM recipes WHERE visibility = 'shared' AND name = ? ORDER BY updated_at DESC LIMIT 1",
+  )
+    .bind(c.req.param('name'))
+    .first<RecipeRow>();
+  if (!shared) return handleError(new RecipeError('NotFound', 'recipe not found'));
+  return c.json(fullRecipe(shared));
 });
 
 // DELETE /recipe/:name — owner-scoped delete.

@@ -68,12 +68,12 @@
 
     <main class="wrap">
       <section class="hero">
-        <p class="eyebrow">[ recipes on a shelf ]</p>
-        <h1>A shelf for the scripts your agents keep re-deriving.</h1>
+        <p class="eyebrow">[ single-player recipes on a shelf ]</p>
+        <h1>A private shelf for the scripts your agents keep re-deriving.</h1>
         <p class="lede">
-          pantry is a small Cloudflare Worker and D1 store of recipes, so an agent can reuse a
-          saved recipe instead of re-reasoning the same pattern. It stores the code and hands it
-          back when asked. It never runs it.
+          pantry is a small Cloudflare Worker and D1 store for your own recipes first. Your agent
+          can list, get, run, and push saved code instead of re-reasoning the same pattern. pantry
+          stores the code and hands it back when asked. It never runs it.
         </p>
 
         <div class="badges">
@@ -98,15 +98,15 @@
         <article class="card">
           <h3>The recipe shape</h3>
           <p>
-            A recipe is a named JavaScript function body with an input schema and a list of
-            capability tags. pantry keeps it in D1 and returns the code verbatim when asked.
+            A recipe is a named JavaScript function body with an input schema, capability tags, and
+            a private owner. pantry keeps it in D1 and returns the code verbatim when asked.
           </p>
         </article>
         <article class="card">
           <h3>Cheap discovery</h3>
           <p>
-            <code>GET /recipes</code> lists names, descriptions, schemas, and capabilities without
-            the code, so a model can decide a recipe fits before transferring the script.
+            <code>GET /recipes</code> lists your names, descriptions, schemas, and capabilities
+            without the code, so a model can decide a recipe fits before transferring the script.
           </p>
         </article>
         <article class="card">
@@ -129,13 +129,34 @@
       <section class="flow">
         <h2>How a recipe gets used</h2>
         <pre class="ascii">
-discover    GET /recipes        names + schemas, no code
+discover    GET /recipes        your names + schemas, no code
 fetch       GET /recipe/:name   the full recipe, including code
 decide      caller's choice     run it, or re-reason it
 run         caller's isolate    pantry is not involved</pre>
         <p class="note">
           A saved recipe saves model tokens only for a recurring pattern. Novel work still needs
           reasoning, because there is no saved recipe to reuse.
+        </p>
+      </section>
+
+      <section class="flow shared-pantry">
+        <p class="eyebrow">[ shared pantry, multiplayer ]</p>
+        <h2>The same shelf can be shared</h2>
+        <p>
+          Single-player is the default. The multiplayer move is not a rewrite or a new set of
+          verbs. A recipe already has an owner, so sharing relaxes one boundary: a recipe stays
+          <code>private</code> unless you push it with <code>visibility: "shared"</code> or
+          <code>pantry push --shared</code>.
+        </p>
+        <pre class="ascii">
+push        visibility: "shared"   publish your own recipe
+list        GET /recipes?scope=shared   shared names + schemas, no code
+fetch       GET /recipe/:name       your recipe wins, then shared
+trust       author owner            provenance on the shared row</pre>
+        <p class="note">
+          Writes stay owner-scoped. Shared reads show the author owner as provenance, because the
+          server still never runs a recipe and capabilities are tags, not grants. The caller still
+          decides whether to fetch code, whether to run it, and what isolate deserves the risk.
         </p>
       </section>
     </main>

@@ -57,10 +57,14 @@ Read at call time, never printed:
 
 ## Actions
 
-- **`list`** — recipe names + descriptions + `inputSchema` + capabilities, **no code**. Cheap discovery.
+- **`list`** — recipe names + descriptions + `inputSchema` + capabilities, **no code**. Cheap discovery. Pass `scope: "shared"` for the shared read pool with `author` provenance.
 - **`get(name)`** — the full recipe **including** `code` + capabilities. Read this before you run anything.
 - **`run(name, input)`** — fetch the recipe, then execute its `code` over an explicit restricted `ctx` (`{ input }`). Not a sandbox (see above). `guard` defaults to `true` (best-effort tripwire; pass `false` to run raw).
-- **`push(recipe)`** — upsert a recipe: `{ name, description, inputSchema, code, capabilities[], status?, sourceRunId? }`.
+- **`push(recipe)`** — upsert a recipe: `{ name, description, inputSchema, code, capabilities[], visibility?, status?, sourceRunId? }`. Pass `shared: true` or `recipe.visibility = "shared"` to publish your own recipe to shared reads.
+
+## Shared pantry
+
+Single-player is the default. Shared pantry uses the same four actions: list with `scope: "shared"`, push with `shared: true` or `visibility: "shared"`, get, and run. Writes remain owner-scoped. Shared responses include `author` so the caller can reason about provenance before running fetched code.
 
 ## Known issue: stale local DNS
 

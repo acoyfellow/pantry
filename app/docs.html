@@ -75,6 +75,7 @@
           <li><a href="#api">The API</a></li>
           <li><a href="#agent">Use a recipe from your agent</a></li>
           <li><a href="#origin">Where recipes come from</a></li>
+          <li><a href="#shared">Shared pantry</a></li>
           <li><a href="#security">Security</a></li>
           <li><a href="#economics">Token economics</a></li>
           <li><a href="#limits">Limits</a></li>
@@ -97,8 +98,9 @@
             isolate. Whether to run fetched code is the caller's trust decision.
           </p>
           <p>
-            The store is single-tenant by default. A bearer token maps to one owner, and an owner
-            sees only its own recipes.
+            The store is single-player by default. A bearer token maps to one owner, and an owner
+            sees its own recipes first. That is the fully working path: list, get, run locally, and
+            push recipes for yourself.
           </p>
         </section>
 
@@ -264,6 +266,32 @@ if (recipe) {
             only when its status is <code>enabled</code>), and fail-soft (a network error, a
             rejected recipe, or a malformed row is logged and skipped). The token travels only in
             the <code>Authorization</code> header and is never logged.
+          </p>
+        </section>
+
+        <section id="shared">
+          <h2>Shared pantry</h2>
+          <p>
+            The same interface can read a shared shelf by relaxing one boundary. Recipes are
+            private unless their owner marks them <code>visibility: "shared"</code>. There are no
+            new core verbs: push can set visibility, list can ask for <code>?scope=shared</code>,
+            and get still returns a full recipe.
+          </p>
+          <pre><code>// Publish your own recipe to the shared shelf.
+await pantry.push({ ...recipe, visibility: 'shared' });
+// or: pantry push --shared recipe.json
+
+// Discover shared recipes without transferring code.
+const shared = await pantry.list({ scope: 'shared' });
+// each shared row includes the author owner as provenance
+
+// Fetch still uses the same name lookup. Your own recipe wins first.
+const recipe = await pantry.get('slugify');</code></pre>
+          <p>
+            Writes stay owner-scoped: you can publish, unpublish, update, or delete only your own
+            row. Shared recipes expose the author owner so a caller can reason about provenance
+            before fetching code. pantry still never runs the recipe; the caller runs fetched code
+            in its own isolate if it chooses to run it at all.
           </p>
         </section>
 

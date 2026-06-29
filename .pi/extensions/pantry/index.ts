@@ -149,10 +149,18 @@ const PARAMS = Type.Object({
       description: 'Input object passed to the recipe as ctx.input. Used by run.',
     }),
   ),
+  scope: Type.Optional(
+    StringEnum(['owner', 'shared'] as const, {
+      description: "list only: 'owner' (default) or 'shared' shared read pool.",
+    }),
+  ),
+  shared: Type.Optional(
+    Type.Boolean({ description: 'push only: set recipe.visibility to shared.' }),
+  ),
   recipe: Type.Optional(
     Type.Unknown({
       description:
-        'Full recipe object to upsert: { name, description, inputSchema, code, capabilities[], status?, sourceRunId? }. Used by push.',
+        'Full recipe object to upsert: { name, description, inputSchema, code, capabilities[], visibility?, status?, sourceRunId? }. Used by push.',
     }),
   ),
   guard: Type.Optional(
@@ -167,6 +175,8 @@ export type PantryToolInput = {
   action: 'list' | 'get' | 'run' | 'push';
   name?: string;
   input?: unknown;
+  scope?: 'owner' | 'shared';
+  shared?: boolean;
   recipe?: unknown;
   guard?: boolean;
 };
@@ -180,14 +190,14 @@ export default function pantryExtension(pi: ExtensionAPI) {
       'Backed by the repo PantryClient; pantry stores and hands back scripts, it never runs them.',
       '',
       'Actions:',
-      '- list: recipe names + descriptions + inputSchema + capabilities (NO code). Cheap discovery.',
+      '- list: recipe names + descriptions + inputSchema + capabilities (NO code). Cheap discovery. Pass scope="shared" for shared recipes with author provenance.',
       '- get(name): the full recipe INCLUDING code + capabilities. Read before you run.',
       '- run(name, input): fetch the recipe then execute its code over an explicit restricted ctx.',
       "  THIS IS NOT A SECURITY SANDBOX. Running fetched code is the caller's decision and risk;",
       '  the runner shadows ambient names and runs a best-effort tripwire, but import()/the',
       '  Function-constructor climb/string-built names all escape it. Untrusted recipes need a',
       '  real isolate (Worker Loader, separate Worker, child process, vetted sandbox).',
-      '- push(recipe): upsert a recipe ({name,description,inputSchema,code,capabilities[]}).',
+      '- push(recipe): upsert a recipe ({name,description,inputSchema,code,capabilities[],visibility?}). Pass shared=true to publish your own recipe to the shared read pool.',
       '',
       'Config: PANTRY_URL (default https://pantry.coey.dev), PANTRY_TOKEN (env or',
       '~/.terrarium/pantry-token.secret; never printed). Stale local DNS can make plain fetch throw',
@@ -207,7 +217,8 @@ export default function pantryExtension(pi: ExtensionAPI) {
       if (action === 'list') {
         const { client, url } = await makeClient();
         try {
-          const recipes = await client.list();
+          const scope = (params as PantryToolInput).scope === 'shared' ? 'shared' : undefined;
+          const recipes = await client.list(scope ? { scope } : undefined);
           return {
             content: [
               {
@@ -285,7 +296,9 @@ export default function pantryExtension(pi: ExtensionAPI) {
         }
         const { client, url } = await makeClient();
         try {
-          const saved = await client.push(recipe as Parameters<typeof client.push>[0]);
+          const pushed = { ...(recipe as Record<string, unknown>) };
+          if ((params as PantryToolInput).shared) pushed.visibility = 'shared';
+          const saved = await client.push(pushed as Parameters<typeof client.push>[0]);
           return {
             content: [
               {

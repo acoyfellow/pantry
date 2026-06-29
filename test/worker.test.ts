@@ -5,10 +5,14 @@ import { FakeD1 } from './fake-d1.ts';
 const TOKEN = 'super-secret-token';
 
 function makeEnv(token: string | undefined = TOKEN): Env {
+  return makeEnvForDb(new FakeD1(), 'default', token);
+}
+
+function makeEnvForDb(db: FakeD1, owner: string, token: string | undefined = TOKEN): Env {
   return {
-    DB: new FakeD1() as unknown as D1Database,
+    DB: db as unknown as D1Database,
     PANTRY_TOKEN: token,
-    PANTRY_OWNER: 'default',
+    PANTRY_OWNER: owner,
   };
 }
 
@@ -109,9 +113,62 @@ describe('routes round-trip', () => {
     expect(listBody.recipes[0].version).toBe(1);
 
     const get = await app.fetch(req('/recipe/slugify'), env);
-    const full = (await get.json()) as { code: string; capabilities: string[] };
+    const full = (await get.json()) as {
+      code: string;
+      capabilities: string[];
+      visibility: string;
+      author: string;
+    };
     expect(full.code).toBe(sample.code);
     expect(full.capabilities).toEqual(['text.transform']);
+    expect(full.visibility).toBe('private');
+    expect(full.author).toBe('default');
+  });
+
+  test('shared scope lists shared recipes across owners with author and without code', async () => {
+    const db = new FakeD1();
+    await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      makeEnvForDb(db, 'alice'),
+    );
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'sharedOne', visibility: 'shared' }),
+      }),
+      makeEnvForDb(db, 'bob'),
+    );
+
+    const res = await app.fetch(req('/recipes?scope=shared'), makeEnvForDb(db, 'alice'));
+    const body = (await res.json()) as { recipes: Array<Record<string, unknown>> };
+    expect(body.recipes.map((r) => r.name)).toEqual(['sharedOne']);
+    expect(body.recipes[0].author).toBe('bob');
+    expect(body.recipes[0].visibility).toBe('shared');
+    expect('code' in body.recipes[0]).toBe(false);
+  });
+
+  test('GET own recipe wins before shared recipe of same name', async () => {
+    const db = new FakeD1();
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, code: 'return "shared";', visibility: 'shared' }),
+      }),
+      makeEnvForDb(db, 'bob'),
+    );
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, code: 'return "own";' }),
+      }),
+      makeEnvForDb(db, 'alice'),
+    );
+    const own = await app.fetch(req('/recipe/slugify'), makeEnvForDb(db, 'alice'));
+    expect(((await own.json()) as { code: string; author: string }).code).toBe('return "own";');
+    const shared = await app.fetch(req('/recipe/slugify'), makeEnvForDb(db, 'charlie'));
+    const sharedBody = (await shared.json()) as { code: string; author: string };
+    expect(sharedBody.code).toBe('return "shared";');
+    expect(sharedBody.author).toBe('bob');
   });
 
   test('re-POST upserts and bumps version (200)', async () => {
@@ -153,13 +210,36 @@ describe('routes round-trip', () => {
     expect(again.status).toBe(404);
   });
 
-  test('owner isolation: a different owner cannot see another owner rows', async () => {
+  test('owner isolation: a different owner cannot see another owner private rows', async () => {
     await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), env);
     const otherEnv: Env = { ...env, PANTRY_OWNER: 'someone-else' };
     const list = await app.fetch(req('/recipes'), otherEnv);
     expect((await list.json()) as { recipes: unknown[] }).toEqual({ recipes: [] });
+    const sharedList = await app.fetch(req('/recipes?scope=shared'), otherEnv);
+    expect((await sharedList.json()) as { recipes: unknown[] }).toEqual({ recipes: [] });
     const get = await app.fetch(req('/recipe/slugify'), otherEnv);
     expect(get.status).toBe(404);
+  });
+
+  test('another owner cannot flip someone else visibility', async () => {
+    const db = new FakeD1();
+    await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      makeEnvForDb(db, 'alice'),
+    );
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, visibility: 'shared' }),
+      }),
+      makeEnvForDb(db, 'bob'),
+    );
+    const alice = await app.fetch(req('/recipe/slugify'), makeEnvForDb(db, 'alice'));
+    expect(((await alice.json()) as { visibility: string }).visibility).toBe('private');
+    const bob = await app.fetch(req('/recipe/slugify'), makeEnvForDb(db, 'bob'));
+    const bobBody = (await bob.json()) as { visibility: string; author: string };
+    expect(bobBody.visibility).toBe('shared');
+    expect(bobBody.author).toBe('bob');
   });
 
   test('every response carries ACAO', async () => {

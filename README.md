@@ -28,7 +28,7 @@
 
 A recipe is a named JavaScript function with an input schema and a list of capability tags. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches a recipe and runs it in the caller's own isolate. Whether to run fetched code is the caller's trust decision.
 
-The store is single-tenant by default. A bearer token maps to one owner, and an owner sees only its own recipes.
+The store is single-player first. A bearer token maps to one owner, and the default list shows only that owner's recipes. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance. Writes stay owner-scoped, and pantry still never runs a recipe.
 
 ## The Recipe Shape
 
@@ -59,6 +59,7 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `capabilities` must list at least one tag. A tag is either a scoped namespace (`workspace.*`, `machine.*`, `cloudbox.*`) or a generic dotted tag such as `text.transform`. Tags are deduplicated and sorted.
 - `status` is `"enabled"` or `"disabled"`. Anything other than `"disabled"` becomes `"enabled"`.
 - `sourceRunId` is an optional string, otherwise `null`.
+- `visibility` is `"private"` by default. Set `"shared"` to opt your own recipe into the shared read pool.
 
 The `code` field receives a single `ctx` object and returns a plain value. The demo runner accepts the shapes an agent naturally authors: a bare function body that reads `ctx`, an `export default (ctx) => ...` (or `export default function`), or a `module.exports = ...`. The sample in `examples/sample-recipe.ts` reads `ctx.input.text` and returns `{ slug }`.
 
@@ -68,7 +69,7 @@ Run it locally with wrangler. Install, apply the D1 migration to the local datab
 
 ```sh
 bun install
-bunx wrangler d1 migrations apply pantry-db --local   # creates the recipes table in local D1
+bunx wrangler d1 migrations apply pantry-db --local   # creates/updates the local D1 schema
 echo 'PANTRY_TOKEN=dev-secret' > .dev.vars
 bun run dev
 ```
@@ -90,9 +91,24 @@ curl "$PANTRY_URL/health"
 # {"ok":true,"service":"pantry"}
 ```
 
+
+### Shared pantry (multiplayer)
+
+Single-player remains the default. Shared pantry widens reads only, with no new core verbs:
+
+```sh
+pantry push recipe.json           # private
+pantry push recipe.json --shared  # publish your own recipe
+pantry list                       # your recipes
+pantry list --shared              # shared recipes, no code, includes author
+pantry get Name                   # own recipe wins, then shared
+```
+
+API shape: `GET /recipes?scope=shared` lists shared recipes across owners without code and includes `author`. `GET /recipe/:name` resolves your own recipe first, then the most recently updated shared recipe with that name. Private recipes never cross owner boundaries. Provenance is informational: a shared recipe is still fetched code, and the caller decides whether and where to run it.
+
 ### `POST /recipes`
 
-Upsert a recipe. Creates on first push (`201`), bumps `version` and updates the row on a repeat push of the same `(owner, name)` (`200`).
+Upsert a recipe. Creates on first push (`201`), bumps `version` and updates the row on a repeat push of the same `(owner, name)` (`200`). Optional `visibility` is `private` or `shared`; only your own row is written.
 
 ```sh
 curl -X POST "$PANTRY_URL/recipes" \
@@ -113,7 +129,7 @@ An invalid body returns `400` with `{ "error": ..., "code": "InvalidInput" }`.
 
 ### `GET /recipes`
 
-List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the cheap discovery call.
+List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the cheap discovery call. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`.
 
 ```sh
 curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
@@ -124,7 +140,7 @@ curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
 
 ### `GET /recipe/:name`
 
-The full recipe, including `code`. This is the call a caller makes right before running the recipe. Returns `404` when the recipe does not exist for this owner.
+The full recipe, including `code`. This is the call a caller makes right before running the recipe. Your own recipe wins; if missing, pantry returns the most recently updated shared recipe with that name. Returns `404` when neither exists.
 
 ```sh
 curl "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TOKEN"

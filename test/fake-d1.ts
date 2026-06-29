@@ -39,10 +39,27 @@ class FakeStatement {
       const row = this.db.rows.find((r) => r.owner === owner && r.name === name);
       return (row ?? null) as T | null;
     }
+    if (this.sql.startsWith("SELECT * FROM recipes WHERE visibility = 'shared' AND name = ?")) {
+      const [name] = this.args as [string];
+      const row = this.db.rows
+        .filter((r) => r.visibility === 'shared' && r.name === name)
+        .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))[0];
+      return (row ?? null) as T | null;
+    }
     return null;
   }
 
   async all<T>(): Promise<{ results: T[] }> {
+    if (
+      this.sql.startsWith(
+        "SELECT * FROM recipes WHERE visibility = 'shared' ORDER BY updated_at DESC",
+      )
+    ) {
+      const results = this.db.rows
+        .filter((r) => r.visibility === 'shared')
+        .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+      return { results: results as T[] };
+    }
     if (this.sql.startsWith('SELECT * FROM recipes WHERE owner = ? ORDER BY updated_at DESC')) {
       const [owner] = this.args as [string];
       const results = this.db.rows
@@ -66,6 +83,7 @@ class FakeStatement {
         status,
         version,
         source_run_id,
+        visibility,
         created_at,
         updated_at,
       ] = this.args as [
@@ -79,6 +97,7 @@ class FakeStatement {
         RecipeRow['status'],
         number,
         string | null,
+        RecipeRow['visibility'],
         string,
         string,
       ];
@@ -94,6 +113,7 @@ class FakeStatement {
         status,
         version,
         source_run_id,
+        visibility,
         created_at,
         updated_at,
       };

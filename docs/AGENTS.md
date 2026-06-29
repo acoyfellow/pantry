@@ -27,6 +27,7 @@ A pushed recipe must have:
 - `inputSchema.type` equal to `object`
 - `code` present and at most 32KB
 - at least one valid capability tag, such as `text.transform` or `workspace.read`
+- optional `visibility`: `private` by default, or `shared` for opt-in shared reads
 
 The runner accepts a bare function body that reads `ctx`, `export default (input, ctx) => ...`, `export default function`, and `module.exports = (input, ctx) => ...`. Exported callables receive `(ctx.input, ctx)`. This is convenience, not a sandbox.
 
@@ -82,6 +83,8 @@ pantry list --json
 pantry get TitleCaseDemo --json
 printf '{"text":"hello pantry"}' | pantry run TitleCaseDemo --input -
 pantry run TitleCaseDemo --input @input.json --json
+pantry push /tmp/title-case-demo.json --shared
+pantry list --shared
 ```
 
 During local development:
@@ -92,6 +95,17 @@ bunx pantry list
 ```
 
 `list` shows recipe names, descriptions, schemas, and capabilities without code. `get` returns the full recipe, including code. Read before you run.
+
+## Shared pantry (multiplayer)
+
+Default use is still your private shelf. To publish a recipe you own, push it with `visibility: "shared"` or use `pantry push file.json --shared`. Shared reads use the same verbs:
+
+```sh
+pantry list --shared
+pantry get TitleCaseDemo
+```
+
+`pantry list --shared` maps to `GET /recipes?scope=shared`, returns no code, and includes `author` for provenance. `get` resolves your own recipe first, then a shared recipe by name. The server never runs shared code; decide whether to run it based on author, code, capabilities, and your own isolation.
 
 ## Pi extension
 
@@ -109,6 +123,7 @@ Also available:
 
 ```json
 {"action":"list"}
+{"action":"list","scope":"shared"}
 {"action":"get","name":"TitleCaseDemo"}
 ```
 

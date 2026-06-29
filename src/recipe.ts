@@ -6,6 +6,8 @@
 
 export const RECIPE_STATUSES = ['enabled', 'disabled'] as const;
 export type RecipeStatus = (typeof RECIPE_STATUSES)[number];
+export const RECIPE_VISIBILITIES = ['private', 'shared'] as const;
+export type RecipeVisibility = (typeof RECIPE_VISIBILITIES)[number];
 
 // The stored row, as it lives in D1.
 export type RecipeRow = {
@@ -19,6 +21,7 @@ export type RecipeRow = {
   status: RecipeStatus;
   version: number;
   source_run_id: string | null;
+  visibility?: RecipeVisibility;
   created_at: string;
   updated_at: string;
 };
@@ -37,6 +40,7 @@ export type RecipeInput = {
   capabilities: string[];
   sourceRunId: string | null;
   status: RecipeStatus;
+  visibility?: RecipeVisibility;
 };
 
 export class RecipeError extends Error {
@@ -123,11 +127,12 @@ export function validateRecipeInput(input: unknown): RecipeInput {
   const code = cleanCode(body.code);
   const capabilities = cleanCapabilities(body.capabilities);
   const status: RecipeStatus = body.status === 'disabled' ? 'disabled' : 'enabled';
+  const visibility: RecipeVisibility = body.visibility === 'shared' ? 'shared' : 'private';
   const sourceRunId =
     typeof body.sourceRunId === 'string' && body.sourceRunId.trim()
       ? body.sourceRunId.trim()
       : null;
-  return { name, description, inputSchema, code, capabilities, status, sourceRunId };
+  return { name, description, inputSchema, code, capabilities, status, sourceRunId, visibility };
 }
 
 // The cheap discovery shape: everything a caller needs to choose a recipe,
@@ -141,6 +146,8 @@ export function listEntry(row: RecipeRow) {
     status: row.status,
     version: row.version,
     sourceRunId: row.source_run_id,
+    visibility: row.visibility ?? 'private',
+    author: row.owner,
     updatedAt: row.updated_at,
   };
 }
@@ -155,5 +162,7 @@ export function fullRecipe(row: RecipeRow) {
   };
 }
 
-export type RecipeListEntry = ReturnType<typeof listEntry>;
-export type FullRecipe = ReturnType<typeof fullRecipe>;
+export type RecipeListEntry = Partial<ReturnType<typeof listEntry>> &
+  Omit<ReturnType<typeof listEntry>, 'visibility' | 'author'>;
+export type FullRecipe = Partial<ReturnType<typeof fullRecipe>> &
+  Omit<ReturnType<typeof fullRecipe>, 'visibility' | 'author'>;

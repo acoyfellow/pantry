@@ -18,6 +18,14 @@ export const PantryPlugin: Plugin = async () => ({
           .describe('list, get, run, or push'),
         name: tool.schema.string().optional().describe('Recipe name for get and run'),
         input: tool.schema.any().optional().describe('Input object passed to ctx.input for run'),
+        scope: tool.schema
+          .enum(['owner', 'shared'])
+          .optional()
+          .describe('list only: owner or shared'),
+        shared: tool.schema
+          .boolean()
+          .optional()
+          .describe('push only: set recipe.visibility to shared'),
         recipe: tool.schema.any().optional().describe('Recipe object for push'),
         guard: tool.schema
           .boolean()
@@ -27,7 +35,12 @@ export const PantryPlugin: Plugin = async () => ({
       async execute(args) {
         const { client, url } = makeClient();
         try {
-          if (args.action === 'list') return JSON.stringify(await client.list(), null, 2);
+          if (args.action === 'list')
+            return JSON.stringify(
+              await client.list(args.scope === 'shared' ? { scope: 'shared' } : undefined),
+              null,
+              2,
+            );
           if (args.action === 'get') {
             if (!args.name) throw new Error('pantry get requires name');
             const recipe = await client.get(args.name);
@@ -49,7 +62,9 @@ export const PantryPlugin: Plugin = async () => ({
           if (args.action === 'push') {
             if (!args.recipe || typeof args.recipe !== 'object')
               throw new Error('pantry push requires recipe object');
-            const saved = await client.push(args.recipe as Parameters<typeof client.push>[0]);
+            const recipe = { ...(args.recipe as Record<string, unknown>) };
+            if (args.shared) recipe.visibility = 'shared';
+            const saved = await client.push(recipe as Parameters<typeof client.push>[0]);
             return JSON.stringify({ saved, url }, null, 2);
           }
           throw new Error(`unknown pantry action: ${String(args.action)}`);
