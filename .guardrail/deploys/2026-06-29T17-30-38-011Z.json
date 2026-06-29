@@ -1,0 +1,53 @@
+{
+  "schema": "guardrail.deploy-receipt.v0",
+  "timestamp": "2026-06-29T17:30:38.011Z",
+  "command": [
+    "wrangler",
+    "deploy"
+  ],
+  "configPath": "/Users/jcoeyman/cloudflare/pantry/wrangler.jsonc",
+  "git": {
+    "sha": "d65e923aec96dae504f8ced2f5da375324201895",
+    "dirty": false,
+    "remote": "https://github.com/acoyfellow/pantry.git"
+  },
+  "decision": {
+    "allowed": true,
+    "findings": [
+      {
+        "severity": "WARNING",
+        "message": "Worker is attached to custom route pantry.coey.dev with sensitive bindings"
+      },
+      {
+        "severity": "WARNING",
+        "message": "d1 binding \"DB\" exposed on custom route pantry.coey.dev"
+      },
+      {
+        "severity": "CRITICAL",
+        "message": "internal notes/strategy directory — .context/loops/pantry-rounds/bridge/stage3-dogfood-log.md"
+      }
+    ]
+  },
+  "exposure": {
+    "isPublic": true,
+    "surface": "custom route pantry.coey.dev",
+    "reason": "custom route pantry.coey.dev",
+    "criticalMessage": "Worker is attached to custom route pantry.coey.dev with sensitive bindings",
+    "routes": [
+      "pantry.coey.dev"
+    ],
+    "workersDev": false
+  },
+  "bindings": [
+    {
+      "type": "d1",
+      "name": "DB"
+    }
+  ],
+  "auth": {
+    "detected": false,
+    "partial": false,
+    "patterns": [],
+    "source": "/Users/jcoeyman/cloudflare/pantry/src/worker.ts"
+  }
+}
