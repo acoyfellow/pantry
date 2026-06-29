@@ -11,6 +11,15 @@
   "routes": [
     { "pattern": "pantry.coey.dev", "custom_domain": true }
   ],
+  // ONE Worker serves both the API and the docs/landing site. The Worker owns
+  // the API paths listed in run_worker_first (it runs the Hono app for them);
+  // every other path falls through to the static site in ./app/dist.
+  // The API stays gated; the static site is public and never embeds the token.
+  "assets": {
+    "directory": "./app/dist",
+    "binding": "APP_ASSETS",
+    "run_worker_first": ["/health", "/recipes", "/recipes/*", "/recipe/*"]
+  },
   "d1_databases": [
     {
       "binding": "DB",

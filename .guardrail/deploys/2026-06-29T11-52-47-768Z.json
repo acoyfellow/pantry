@@ -1,0 +1,50 @@
+{
+  "schema": "guardrail.deploy-receipt.v0",
+  "timestamp": "2026-06-29T11:52:47.768Z",
+  "command": [
+    "guardrail",
+    "receipt",
+    "wrangler.jsonc"
+  ],
+  "configPath": "wrangler.jsonc",
+  "git": {
+    "sha": "3db3e36c6f684bf85fe5c4e08b8081edc55a2fa4",
+    "dirty": true,
+    "remote": "https://github.com/acoyfellow/pantry.git"
+  },
+  "decision": {
+    "allowed": true,
+    "findings": [
+      {
+        "severity": "WARNING",
+        "message": "Worker will have a public workers.dev URL AND custom routes with sensitive bindings"
+      },
+      {
+        "severity": "WARNING",
+        "message": "d1 binding \"DB\" exposed on workers.dev URL + custom route pantry.coey.dev"
+      }
+    ]
+  },
+  "exposure": {
+    "isPublic": true,
+    "surface": "workers.dev URL + custom route pantry.coey.dev",
+    "reason": "workers_dev = true and 1 custom route(s)",
+    "criticalMessage": "Worker will have a public workers.dev URL AND custom routes with sensitive bindings",
+    "routes": [
+      "pantry.coey.dev"
+    ],
+    "workersDev": true
+  },
+  "bindings": [
+    {
+      "type": "d1",
+      "name": "DB"
+    }
+  ],
+  "auth": {
+    "detected": false,
+    "partial": false,
+    "patterns": [],
+    "source": "/Users/jcoeyman/cloudflare/pantry/src/worker.ts"
+  }
+}

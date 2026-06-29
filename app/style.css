@@ -1,0 +1,320 @@
+/* pantry — warm pantry/larder palette, house-consistent with the AX system.
+   Amber/orange is the primary signal; warm wood tones carry the shelf motif. */
+:root {
+  --ink: #120d07;
+  --layer: #1a130a;
+  --layer-2: #241a0e;
+  --text: #f7f1e6;
+  --muted: #c2b29a;
+  --orange: #f6821f;
+  --amber: #f7b53b;
+  --blue-light: #71b8d8;
+  --green: #63d5a2;
+  --wood: #7a5732;
+  --border: rgba(247, 181, 59, 0.16);
+  --radius: 0.7rem;
+  --radius-sm: 0.45rem;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: Inter, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  color: var(--text);
+  background: radial-gradient(1100px 480px at 50% -8%, rgba(246, 130, 31, 0.12), transparent 70%),
+    var(--ink);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+/* ---- nav ---- */
+.topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.2rem 0;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  text-decoration: none;
+}
+.brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, var(--amber), var(--orange));
+  box-shadow: 0 0 0 2px rgba(247, 181, 59, 0.18);
+}
+.navlinks a {
+  color: var(--muted);
+  text-decoration: none;
+  margin-left: 1.1rem;
+  font-size: 0.95rem;
+}
+.navlinks a:hover {
+  color: var(--text);
+}
+
+/* ---- hero ---- */
+.eyebrow {
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: var(--amber);
+  margin: 0 0 0.6rem;
+}
+.hero {
+  padding: 2.2rem 0 1rem;
+}
+h1 {
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  margin: 0 0 1rem;
+  max-width: 18ch;
+}
+.lede {
+  font-size: 1.12rem;
+  color: var(--muted);
+  max-width: 60ch;
+  margin: 0 0 1.4rem;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.4rem;
+}
+.badge {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-decoration: none;
+  background: var(--layer);
+}
+.badge-live {
+  color: var(--ink);
+  background: var(--amber);
+  border-color: transparent;
+  font-weight: 600;
+}
+.badge-mr {
+  color: var(--blue-light);
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--layer);
+}
+.btn:hover {
+  border-color: rgba(247, 181, 59, 0.4);
+}
+.btn-primary {
+  background: linear-gradient(160deg, var(--amber), var(--orange));
+  color: var(--ink);
+  border-color: transparent;
+}
+
+/* ---- shelf motif ---- */
+.shelf-scene {
+  margin: 2rem 0 1rem;
+}
+.shelf-svg {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  display: block;
+}
+.jar {
+  transform-origin: center bottom;
+}
+
+/* ---- cards ---- */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.card {
+  background: var(--layer);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+}
+.card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+.card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* ---- flow ---- */
+.flow {
+  margin: 2.5rem 0;
+}
+.flow h2 {
+  letter-spacing: -0.03em;
+}
+.ascii {
+  font-family: var(--mono);
+  background: var(--layer-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+.note {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* ---- code ---- */
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: rgba(247, 181, 59, 0.1);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  color: var(--amber);
+}
+pre {
+  background: var(--layer-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+}
+pre code {
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+/* ---- docs layout ---- */
+.doc-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 2.5rem;
+  padding-top: 1rem;
+}
+.toc {
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
+  font-size: 0.9rem;
+}
+.toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.toc li {
+  margin: 0.4rem 0;
+}
+.toc a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.toc a:hover {
+  color: var(--amber);
+}
+.doc-content {
+  min-width: 0;
+}
+.doc-content h2 {
+  letter-spacing: -0.03em;
+  margin-top: 2.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.doc-content h3 {
+  margin-top: 1.6rem;
+  letter-spacing: -0.02em;
+}
+.doc-content ul {
+  color: var(--muted);
+}
+.doc-content li {
+  margin: 0.35rem 0;
+}
+
+/* ---- footer ---- */
+.site-foot {
+  padding: 2.5rem 0 3rem;
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+  font-size: 0.9rem;
+}
+.site-foot a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-foot a:hover {
+  color: var(--amber);
+}
+.muted {
+  color: var(--muted);
+}
+
+a {
+  color: var(--blue-light);
+}
+
+@media (max-width: 720px) {
+  .doc-body {
+    grid-template-columns: 1fr;
+  }
+  .toc {
+    position: static;
+  }
+}

@@ -118,7 +118,9 @@ curl -X DELETE "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TO
 # {"deleted":true,"name":"slugify"}
 ```
 
-## Using A Recipe From Your Agent
+## The Pantry Agent Tool
+
+An agent reaches pantry two ways: a small client for code, or a Pi tool for a session.
 
 `src/client.ts` is a small client usable from terrarium, Pi, or a Worker. It reads `PANTRY_URL` and `PANTRY_TOKEN` from the environment by default. `list()` fails soft: an unconfigured client returns `[]` rather than throwing, so a recipe lookup degrades to "re-reason it" instead of crashing the caller.
 
@@ -147,20 +149,43 @@ await pantry.push({
 });
 ```
 
-Running a fetched recipe is a separate step that pantry does not perform. `examples/run-recipe.ts` shows one pattern: treat `code` as a function body, call it with an explicit `ctx`, and read the result. That runner is a demo, not a sandbox. See Security.
+The Pi tool wraps that same client so a Pi or terrarium session can reach pantry without curl. It lives at `.pi/extensions/pantry/index.ts`, registers one tool named `pantry`, and exposes four actions:
+
+- `list` returns names, descriptions, input schemas, and capabilities, without `code`. This is the cheap discovery call.
+- `get(name)` returns the full recipe including `code`. The session reads this before deciding to run anything.
+- `run(name, input)` fetches the recipe and executes its `code` over an explicit `ctx` of `{ input }`. This step runs fetched code; see below.
+- `push(recipe)` upserts a recipe in the same shape the API accepts.
+
+Pi auto-discovers the extension once the project is trusted, so the tool registers at session start. To test it directly:
+
+```sh
+pi -e ./.pi/extensions/pantry/index.ts -t pantry \
+  "Call pantry list and tell me the recipe names."
+```
+
+The tool's `run` action and the demo runner share one honest posture: running a fetched recipe is the caller's decision and the caller's risk. The runner shadows a few ambient names and runs a best-effort parse-time scan, but `import()`, the `Function`-constructor climb, and string-built names all escape it. It is a convenience for code you already trust, not a sandbox. Untrusted recipes need a real isolate. See Security, and `docs/PI-TOOL.md` for the tool's configuration, the stale-DNS workaround, and a full example session.
+
+Running a fetched recipe from code is the same separate step. `examples/run-recipe.ts` shows one pattern: treat `code` as a function body, call it with an explicit `ctx`, and read the result.
 
 ```sh
 PANTRY_URL=... PANTRY_TOKEN=... bun examples/sample-recipe.ts   # push the sample
 PANTRY_URL=... PANTRY_TOKEN=... bun examples/run-recipe.ts slugify
 ```
 
-## Token Economics
+## Where Recipes Come From
 
-A recipe saves model tokens only for a recurring pattern. When a pattern repeats, the model can call a known script instead of re-reasoning the same logic each time. That is the mechanism, and it is the whole claim.
+A recipe reaches pantry one of two ways.
 
-There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
+The direct way is a `POST /recipes`, by curl, the client, or the Pi tool's `push`. `examples/recipes/` holds recipes authored this way, such as `deploy_coey_worker`, a guided plan for deploying a coey.dev Worker with D1.
 
-This repository ships no measured token numbers. The saving depends on how often a pattern recurs and how large the re-reasoning would have been, neither of which pantry measures. Treat the mechanism as the claim, not a benchmark.
+The other way is the my-ax bridge, which lives in the my-ax repo (a separate repository, not part of pantry) at `src/pantry-sync.ts`. my-ax keeps its own `saved_recipes` in D1, and the bridge maps each row to a pantry `POST /recipes` body: `name`, `description`, `inputSchema` from the stored JSON, `code`, and `capabilities` from the stored JSON. The bridge is deliberately narrow:
+
+- Additive. Nothing in my-ax's request path calls it; a caller opts in.
+- Env-gated. It reads `PANTRY_URL` (default `https://pantry.coey.dev`) and `PANTRY_TOKEN`. With no token it logs a no-op and returns.
+- Enabled-only. It pushes a recipe only when its status is `enabled`, and skips the rest.
+- Fail-soft. A network error, a rejected recipe, or a malformed row is logged and skipped. The sync never throws into a my-ax flow.
+
+The capability tags carry across unchanged. my-ax writes `workspace.*`, `machine.*`, and `cloudbox.*` tags; pantry stores them verbatim and grants nothing. The tag is something a fetching caller reasons about, not a permission pantry enforces. The token travels only in the `Authorization` header and is never logged.
 
 ## Security
 
@@ -187,14 +212,26 @@ Server-side defenses pantry does provide:
 - pantry never runs a recipe, so it enforces nothing about what `code` does at runtime. `capabilities` are tags for the caller to reason about, not a sandbox.
 - D1 limits apply to row size and database size.
 
+## Token Economics
+
+A recipe saves model tokens only for a recurring pattern. When a pattern repeats, the model can call a known script instead of re-reasoning the same logic each time. That is the mechanism, and it is the whole claim.
+
+There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
+
+This repository ships no measured token numbers. The saving depends on how often a pattern recurs and how large the re-reasoning would have been, neither of which pantry measures. Treat the mechanism as the claim, not a benchmark.
+
 ## Layout
 
 ```text
-src/worker.ts            Hono routes, auth gate, CORS, D1 queries
+src/worker.ts            one Worker: API paths run Hono, the rest serve the site
+app/                     the docs/landing site (built to app/dist)
+scripts/build-site.ts    builds app/dist (bun run build:site)
 src/recipe.ts            recipe shape, validation, list/full projections
 src/client.ts            PantryClient: list / get / push / delete
+.pi/extensions/pantry/index.ts  the Pi tool (list / get / run / push)
 migrations/0001_recipes.sql   the recipes table and indexes
 examples/sample-recipe.ts     a real recipe (slugify) and a push script
+examples/recipes/             recipes authored directly (deploy_coey_worker)
 examples/run-recipe.ts        a demo runner; NOT a sandbox
 alchemy.run.ts           deploy path (Worker + D1)
 ```

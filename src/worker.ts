@@ -13,7 +13,20 @@ export type Env = {
   PANTRY_TOKEN?: string;
   // Optional fixed owner for single-tenant deploys; defaults to the token-derived owner.
   PANTRY_OWNER?: string;
+  // Static-site binding. The SAME Worker serves the docs/landing site from
+  // ./app/dist for any path the API does not own. Optional so the API logic
+  // and its tests run unchanged without an assets binding present.
+  APP_ASSETS?: Fetcher;
 };
+
+// The API paths this Worker owns. Everything else falls through to the static
+// site. Mirrors wrangler `assets.run_worker_first`.
+function isApiPath(pathname: string): boolean {
+  if (pathname === '/health' || pathname === '/recipes') return true;
+  if (pathname.startsWith('/recipes/')) return true;
+  if (pathname.startsWith('/recipe/')) return true;
+  return false;
+}
 
 type Vars = { owner: string };
 
@@ -171,5 +184,19 @@ app.delete('/recipe/:name', async (c) => {
   return c.json({ deleted: true, name: c.req.param('name') });
 });
 
-export default app;
-export { timingSafeEqual, corsHeaders };
+// ONE Worker, two surfaces. API paths run the Hono app (auth/CORS/D1 unchanged);
+// every other path falls through to the static docs/landing site in ./app/dist.
+// OPTIONS preflight still reaches Hono so CORS is answered before the auth gate.
+export default {
+  async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method === 'OPTIONS' || isApiPath(url.pathname)) {
+      return app.fetch(request, env, ctx);
+    }
+    if (env.APP_ASSETS) return env.APP_ASSETS.fetch(request);
+    // No assets binding (e.g. local API-only run): let Hono answer.
+    return app.fetch(request, env, ctx);
+  },
+};
+
+export { app, timingSafeEqual, corsHeaders };

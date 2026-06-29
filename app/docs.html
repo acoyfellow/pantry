@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pantry — docs</title>
+    <meta
+      name="description"
+      content="pantry API reference: the recipe shape, /health, POST/GET /recipes, GET and DELETE /recipe/:name, the Pi tool and client, where recipes come from, security, token economics, and limits."
+    />
+    <link rel="canonical" href="https://pantry.coey.dev/docs" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <meta property="og:title" content="pantry — docs" />
+    <meta
+      property="og:description"
+      content="The recipe shape, the API with curl, the Pi tool, where recipes come from, security, and limits."
+    />
+    <meta property="og:url" content="https://pantry.coey.dev/docs" />
+    <meta property="og:type" content="article" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "pantry",
+        "description": "A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts; it never runs them.",
+        "codeRepository": "https://github.com/acoyfellow/pantry",
+        "url": "https://pantry.coey.dev/docs",
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": "TypeScript",
+        "runtimePlatform": "Cloudflare Workers",
+        "author": { "@type": "Person", "name": "Jordan Coeyman", "url": "https://coey.dev" }
+      }
+    </script>
+
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="docs">
+    <header class="wrap">
+      <nav class="topnav">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          pantry
+        </a>
+        <div class="navlinks">
+          <a href="/">Home</a>
+          <a href="https://github.com/acoyfellow/pantry">GitHub</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap doc-body">
+      <aside class="toc">
+        <p class="eyebrow">[ contents ]</p>
+        <ul>
+          <li><a href="#what">What it is</a></li>
+          <li><a href="#recipe">The recipe shape</a></li>
+          <li><a href="#api">The API</a></li>
+          <li><a href="#agent">Use a recipe from your agent</a></li>
+          <li><a href="#origin">Where recipes come from</a></li>
+          <li><a href="#security">Security</a></li>
+          <li><a href="#economics">Token economics</a></li>
+          <li><a href="#limits">Limits</a></li>
+        </ul>
+      </aside>
+
+      <article class="doc-content">
+        <h1>pantry docs</h1>
+        <p class="lede">
+          A small Cloudflare Worker and D1 store of recipes, so an agent can reuse a saved recipe
+          instead of re-deriving the same pattern.
+        </p>
+
+        <section id="what">
+          <h2>What it is</h2>
+          <p>
+            A recipe is a named JavaScript function body with an input schema and a list of
+            capability tags. pantry keeps recipes in D1 and hands the code back when asked. It
+            never runs a recipe. The caller fetches a recipe and runs it in the caller's own
+            isolate. Whether to run fetched code is the caller's trust decision.
+          </p>
+          <p>
+            The store is single-tenant by default. A bearer token maps to one owner, and an owner
+            sees only its own recipes.
+          </p>
+        </section>
+
+        <section id="recipe">
+          <h2>The recipe shape</h2>
+          <p>A recipe is the JSON you push to <code>POST /recipes</code>:</p>
+          <pre><code>{
+  "name": "slugify",
+  "description": "Turn arbitrary text into a URL-safe slug. Deterministic, no I/O.",
+  "inputSchema": {
+    "type": "object",
+    "properties": { "text": { "type": "string", "maxLength": 500 } },
+    "required": ["text"]
+  },
+  "code": "const text = String((ctx.input && ctx.input.text) || '');\nreturn { slug: text.toLowerCase().replace(/[^a-z0-9]+/g, '-') };",
+  "capabilities": ["text.transform"],
+  "status": "enabled",
+  "sourceRunId": null
+}</code></pre>
+          <p>Field rules, enforced by <code>validateRecipeInput</code> in <code>src/recipe.ts</code>:</p>
+          <ul>
+            <li><code>name</code> must match <code>/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/</code>. One name per owner.</li>
+            <li><code>description</code> is 5 to 500 characters.</li>
+            <li>
+              <code>inputSchema</code> is an object whose <code>type</code> is <code>"object"</code>.
+              It defaults to <code>{ "type": "object", "properties": {} }</code> when omitted.
+            </li>
+            <li>
+              <code>code</code> is required, is a JavaScript function body, and is at most 32000
+              bytes. The runner calls it with one argument, <code>ctx</code>.
+            </li>
+            <li>
+              <code>capabilities</code> must list at least one tag: a scoped namespace
+              (<code>workspace.*</code>, <code>machine.*</code>, <code>cloudbox.*</code>) or a
+              generic dotted tag such as <code>text.transform</code>. Tags are deduplicated and
+              sorted.
+            </li>
+            <li><code>status</code> is <code>"enabled"</code> or <code>"disabled"</code>. Anything other than <code>"disabled"</code> becomes <code>"enabled"</code>.</li>
+            <li><code>sourceRunId</code> is an optional string, otherwise <code>null</code>.</li>
+          </ul>
+          <p>
+            The <code>code</code> field is a function body, not a module. It receives a single
+            <code>ctx</code> object and returns a plain value.
+          </p>
+        </section>
+
+        <section id="api">
+          <h2>The API</h2>
+          <p>
+            All routes except <code>/health</code> and <code>OPTIONS</code> require
+            <code>Authorization: Bearer &lt;YOUR_TOKEN&gt;</code>. The examples below assume
+            <code>PANTRY_URL</code> is set in your shell, and use a
+            <code>&lt;YOUR_TOKEN&gt;</code> placeholder. The token is a secret; it is never shipped
+            to a browser.
+          </p>
+
+          <h3><code>GET /health</code></h3>
+          <p>Open, no auth. For uptime checks.</p>
+          <pre><code>curl "$PANTRY_URL/health"
+# {"ok":true,"service":"pantry"}</code></pre>
+
+          <h3><code>POST /recipes</code></h3>
+          <p>
+            Upsert a recipe. Creates on first push (<code>201</code>), bumps <code>version</code>
+            and updates the row on a repeat push of the same <code>(owner, name)</code>
+            (<code>200</code>). An invalid body returns <code>400</code> with
+            <code>{ "error": ..., "code": "InvalidInput" }</code>.
+          </p>
+          <pre><code>curl -X POST "$PANTRY_URL/recipes" \
+  -H "authorization: Bearer &lt;YOUR_TOKEN&gt;" \
+  -H "content-type: application/json" \
+  -d '{
+    "name": "slugify",
+    "description": "Turn arbitrary text into a URL-safe slug.",
+    "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+    "code": "return { slug: String(ctx.input.text).toLowerCase() };",
+    "capabilities": ["text.transform"],
+    "status": "enabled"
+  }'
+# {"name":"slugify","version":1}</code></pre>
+
+          <h3><code>GET /recipes</code></h3>
+          <p>
+            List recipes for the owner, ordered by <code>updatedAt</code> descending. The list
+            never includes <code>code</code>. This is the cheap discovery call.
+          </p>
+          <pre><code>curl "$PANTRY_URL/recipes" -H "authorization: Bearer &lt;YOUR_TOKEN&gt;"
+# {"recipes":[{"name":"slugify","description":"...","inputSchema":{...},
+#   "capabilities":["text.transform"],"status":"enabled","version":1,
+#   "sourceRunId":null,"updatedAt":"..."}]}</code></pre>
+
+          <h3><code>GET /recipe/:name</code></h3>
+          <p>
+            The full recipe, including <code>code</code>. This is the call a caller makes right
+            before running the recipe. Returns <code>404</code> when the recipe does not exist for
+            this owner.
+          </p>
+          <pre><code>curl "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer &lt;YOUR_TOKEN&gt;"
+# {"name":"slugify",...,"code":"return { slug: ... };","createdAt":"..."}</code></pre>
+
+          <h3><code>DELETE /recipe/:name</code></h3>
+          <p>Owner-scoped delete. Returns <code>404</code> when nothing was deleted.</p>
+          <pre><code>curl -X DELETE "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer &lt;YOUR_TOKEN&gt;"
+# {"deleted":true,"name":"slugify"}</code></pre>
+
+          <p class="note">
+            The Worker fails closed. With no <code>PANTRY_TOKEN</code> configured, every
+            authenticated route returns <code>503</code>. A wrong or missing bearer token returns
+            <code>401</code>. Only <code>/health</code> and the CORS preflight are open.
+          </p>
+        </section>
+
+        <section id="agent">
+          <h2>Use a recipe from your agent</h2>
+          <p>An agent reaches pantry two ways: a small client for code, or a Pi tool for a session.</p>
+          <p>
+            <code>src/client.ts</code> reads <code>PANTRY_URL</code> and <code>PANTRY_TOKEN</code>
+            from the environment by default. <code>list()</code> fails soft: an unconfigured
+            client returns <code>[]</code> rather than throwing, so a recipe lookup degrades to
+            "re-reason it" instead of crashing the caller.
+          </p>
+          <pre><code>import { pantry } from 'pantry'; // ./src/client.ts
+
+// Discovery: no code is transferred, so this is cheap.
+const available = await pantry.list();
+
+// Fetch the full recipe including code.
+const recipe = await pantry.get('slugify');
+if (recipe) {
+  // recipe.code is a function body. The caller decides whether to run it,
+  // and in what isolate. pantry does not run it for you.
+}</code></pre>
+          <p>
+            The Pi tool wraps that same client so a Pi or terrarium session can reach pantry
+            without curl. It registers one tool named <code>pantry</code> with four actions:
+          </p>
+          <ul>
+            <li><code>list</code> returns names, descriptions, input schemas, and capabilities, without <code>code</code>.</li>
+            <li><code>get(name)</code> returns the full recipe including <code>code</code>. The session reads this before deciding to run anything.</li>
+            <li><code>run(name, input)</code> fetches the recipe and executes its <code>code</code> over an explicit <code>ctx</code> of <code>{ input }</code>. This step runs fetched code.</li>
+            <li><code>push(recipe)</code> upserts a recipe in the same shape the API accepts.</li>
+          </ul>
+          <p>
+            The tool's <code>run</code> action and the demo runner share one honest posture:
+            running a fetched recipe is the caller's decision and the caller's risk. See Security.
+          </p>
+        </section>
+
+        <section id="origin">
+          <h2>Where recipes come from</h2>
+          <p>A recipe reaches pantry one of two ways.</p>
+          <p>
+            The direct way is a <code>POST /recipes</code>, by curl, the client, or the Pi tool's
+            <code>push</code>. The repo's <code>examples/recipes/</code> holds recipes authored
+            this way.
+          </p>
+          <p>
+            The other way is the my-ax bridge, which lives in the my-ax repo, a separate repository
+            that is not part of pantry. my-ax keeps its own saved recipes in D1, and the bridge
+            maps each row to a pantry <code>POST /recipes</code> body. The bridge is deliberately
+            narrow: additive (nothing in my-ax's request path calls it; a caller opts in),
+            env-gated (with no token it logs a no-op and returns), enabled-only (it pushes a recipe
+            only when its status is <code>enabled</code>), and fail-soft (a network error, a
+            rejected recipe, or a malformed row is logged and skipped). The token travels only in
+            the <code>Authorization</code> header and is never logged.
+          </p>
+        </section>
+
+        <section id="security">
+          <h2>Security</h2>
+          <p>
+            pantry stores and hands back a script. It never executes a recipe. The bytes in
+            <code>code</code> are returned verbatim from D1.
+          </p>
+          <p>
+            Running a fetched recipe is the caller's decision and the caller's risk. The example
+            runner is a demo, and its header says plainly that it is not a trust boundary. It binds
+            a few ambient names such as <code>fetch</code> and <code>process</code> to
+            <code>undefined</code> as a convenience, and it runs a best-effort parse-time scan for
+            obvious escape tokens. Both are tripwires. The file documents the escapes that defeat
+            the shadowing, including <code>import('node:fs')</code> and the Function-constructor
+            climb back to global scope. A passing scan proves nothing about safety.
+          </p>
+          <p>
+            If you do not already trust a recipe's author, run the recipe in a real isolate: a
+            Cloudflare Worker Loader, a separate Worker, a child process, or a vetted JS sandbox.
+            Real isolation is the caller's job, and pantry does not do it.
+          </p>
+          <p>Server-side defenses pantry does provide:</p>
+          <ul>
+            <li>
+              Bearer-token gate, fail-closed. No token configured returns <code>503</code>. Wrong
+              or missing token returns <code>401</code>. The compare is constant-time so it does
+              not leak token length or prefix through timing.
+            </li>
+            <li>Owner scoping. A token maps to one owner. Every query filters by owner, so one owner cannot read or delete another owner's recipes.</li>
+            <li>CORS echoes the request origin and never pairs the wildcard with credentials. Preflight is answered before the auth gate.</li>
+            <li>The token is a wrangler/alchemy secret. It is never hardcoded and never shipped to a client.</li>
+          </ul>
+        </section>
+
+        <section id="economics">
+          <h2>Token economics</h2>
+          <p>
+            A recipe saves model tokens only for a recurring pattern. When a pattern repeats, the
+            model can call a known script instead of re-reasoning the same logic each time. That is
+            the mechanism, and it is the whole claim.
+          </p>
+          <p>
+            There is still a per-call discovery cost. The model has to know a recipe exists, read
+            its description and input schema, and decide it fits. <code>GET /recipes</code> keeps
+            that cost low by omitting code. Novel work still needs reasoning, because there is no
+            saved recipe to reuse.
+          </p>
+          <p>
+            This project ships no measured token numbers. The saving depends on how often a pattern
+            recurs and how large the re-reasoning would have been, neither of which pantry
+            measures. Treat the mechanism as the claim, not a benchmark.
+          </p>
+        </section>
+
+        <section id="limits">
+          <h2>Limits</h2>
+          <ul>
+            <li><code>code</code> is capped at 32000 bytes.</li>
+            <li><code>description</code> is 5 to 500 characters.</li>
+            <li>One recipe name per owner. A repeat push upserts and bumps <code>version</code>; it does not create a second row.</li>
+            <li><code>inputSchema.type</code> must be <code>"object"</code>.</li>
+            <li>pantry stores recipes; it does not validate that <code>code</code> is correct, safe, or matches its <code>inputSchema</code>. Validation covers shape and size, not behavior.</li>
+            <li>pantry never runs a recipe, so it enforces nothing about what <code>code</code> does at runtime. <code>capabilities</code> are tags for the caller to reason about, not a sandbox.</li>
+            <li>D1 limits apply to row size and database size.</li>
+          </ul>
+        </section>
+      </article>
+    </main>
+
+    <footer class="wrap site-foot">
+      <p>
+        <a href="/">Home</a> ·
+        <a href="https://github.com/acoyfellow/pantry">GitHub</a> ·
+        <a href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
+      </p>
+      <p class="muted">Built by Jordan Coeyman on Cloudflare Workers and D1.</p>
+    </footer>
+  </body>
+</html>

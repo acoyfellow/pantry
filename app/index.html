@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pantry — a shelf for the scripts your agents keep re-deriving</title>
+    <meta
+      name="description"
+      content="A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts so an agent can reuse a saved recipe instead of re-deriving the same pattern. It never runs them."
+    />
+    <link rel="canonical" href="https://pantry.coey.dev/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <meta property="og:title" content="pantry — a recipe store for agents" />
+    <meta
+      property="og:description"
+      content="Store and hand back named scripts on Cloudflare Workers and D1. Reuse a recipe instead of re-deriving the pattern. pantry never runs them."
+    />
+    <meta property="og:url" content="https://pantry.coey.dev/" />
+    <meta property="og:type" content="website" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "pantry",
+        "description": "A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts; it never runs them.",
+        "codeRepository": "https://github.com/acoyfellow/pantry",
+        "url": "https://pantry.coey.dev/",
+        "license": "https://opensource.org/licenses/MIT",
+        "programmingLanguage": "TypeScript",
+        "runtimePlatform": "Cloudflare Workers",
+        "author": { "@type": "Person", "name": "Jordan Coeyman", "url": "https://coey.dev" }
+      }
+    </script>
+
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="wrap">
+      <nav class="topnav">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true"></span>
+          pantry
+        </a>
+        <div class="navlinks">
+          <a href="/docs">Docs</a>
+          <a href="https://github.com/acoyfellow/pantry">GitHub</a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <p class="eyebrow">[ recipes on a shelf ]</p>
+        <h1>A shelf for the scripts your agents keep re-deriving.</h1>
+        <p class="lede">
+          pantry is a small Cloudflare Worker and D1 store of recipes, so an agent can reuse a
+          saved recipe instead of re-reasoning the same pattern. It stores the code and hands it
+          back when asked. It never runs it.
+        </p>
+
+        <div class="badges">
+          <a class="badge badge-live" href="https://pantry.coey.dev">live: pantry.coey.dev</a>
+          <a class="badge" href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
+          <span class="badge badge-mr">0.0.1</span>
+        </div>
+
+        <div class="cta">
+          <a class="btn btn-primary" href="/docs">Read the docs</a>
+          <a class="btn" href="https://github.com/acoyfellow/pantry">View on GitHub</a>
+        </div>
+      </section>
+
+      <!-- Pantry motif: recipe jars on a wooden shelf. No text baked in. -->
+      <section class="shelf-scene" aria-hidden="true">
+        <svg viewBox="0 0 600 200" class="shelf-svg" role="img">
+          <defs>
+            <linearGradient id="jar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#f7b53b" stop-opacity="0.9" />
+              <stop offset="1" stop-color="#f6821f" stop-opacity="0.8" />
+            </linearGradient>
+            <linearGradient id="jar2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#71b8d8" stop-opacity="0.85" />
+              <stop offset="1" stop-color="#4f93b4" stop-opacity="0.8" />
+            </linearGradient>
+            <linearGradient id="jar3" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#63d5a2" stop-opacity="0.85" />
+              <stop offset="1" stop-color="#3fae80" stop-opacity="0.8" />
+            </linearGradient>
+          </defs>
+          <!-- jars -->
+          <g class="jar">
+            <rect x="60" y="60" width="70" height="100" rx="10" fill="url(#jar)" />
+            <rect x="68" y="44" width="54" height="20" rx="6" fill="#caa15a" />
+            <rect x="74" y="92" width="42" height="34" rx="5" fill="#0b1118" opacity="0.18" />
+          </g>
+          <g class="jar">
+            <rect x="170" y="50" width="70" height="110" rx="10" fill="url(#jar2)" />
+            <rect x="178" y="34" width="54" height="20" rx="6" fill="#caa15a" />
+            <rect x="184" y="86" width="42" height="40" rx="5" fill="#0b1118" opacity="0.18" />
+          </g>
+          <g class="jar">
+            <rect x="280" y="70" width="70" height="90" rx="10" fill="url(#jar3)" />
+            <rect x="288" y="54" width="54" height="20" rx="6" fill="#caa15a" />
+            <rect x="294" y="98" width="42" height="28" rx="5" fill="#0b1118" opacity="0.18" />
+          </g>
+          <g class="jar">
+            <rect x="390" y="56" width="70" height="104" rx="10" fill="url(#jar)" />
+            <rect x="398" y="40" width="54" height="20" rx="6" fill="#caa15a" />
+            <rect x="404" y="90" width="42" height="36" rx="5" fill="#0b1118" opacity="0.18" />
+          </g>
+          <g class="jar">
+            <rect x="500" y="64" width="70" height="96" rx="10" fill="url(#jar2)" />
+            <rect x="508" y="48" width="54" height="20" rx="6" fill="#caa15a" />
+            <rect x="514" y="96" width="42" height="30" rx="5" fill="#0b1118" opacity="0.18" />
+          </g>
+          <!-- shelf plank -->
+          <rect x="20" y="160" width="560" height="16" rx="4" fill="#7a5732" />
+          <rect x="20" y="176" width="560" height="6" rx="2" fill="#5c3f22" />
+        </svg>
+      </section>
+
+      <section class="cards">
+        <article class="card">
+          <h3>The recipe shape</h3>
+          <p>
+            A recipe is a named JavaScript function body with an input schema and a list of
+            capability tags. pantry keeps it in D1 and returns the code verbatim when asked.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Cheap discovery</h3>
+          <p>
+            <code>GET /recipes</code> lists names, descriptions, schemas, and capabilities without
+            the code, so a model can decide a recipe fits before transferring the script.
+          </p>
+        </article>
+        <article class="card">
+          <h3>It never runs your code</h3>
+          <p>
+            pantry stores and transports. Running a fetched recipe, and in what isolate, is the
+            caller's trust decision. The example runner is a convenience, not a sandbox.
+          </p>
+        </article>
+      </section>
+
+      <section class="flow">
+        <h2>How a recipe gets used</h2>
+        <pre class="ascii">
+discover    GET /recipes        names + schemas, no code
+fetch       GET /recipe/:name   the full recipe, including code
+decide      caller's choice     run it, or re-reason it
+run         caller's isolate    pantry is not involved</pre>
+        <p class="note">
+          A saved recipe saves model tokens only for a recurring pattern. Novel work still needs
+          reasoning, because there is no saved recipe to reuse.
+        </p>
+      </section>
+    </main>
+
+    <footer class="wrap site-foot">
+      <p>
+        <a href="/docs">Docs</a> ·
+        <a href="https://github.com/acoyfellow/pantry">GitHub</a> ·
+        <a href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
+      </p>
+      <p class="muted">Built by Jordan Coeyman on Cloudflare Workers and D1.</p>
+    </footer>
+  </body>
+</html>
