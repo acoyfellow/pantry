@@ -24,6 +24,11 @@ export type RecipeRow = {
 };
 
 // The validated input a caller pushes.
+// `code` is executable JavaScript text that pantry only stores and returns.
+// The demo runner accepts these authoring shapes: a bare function body that
+// reads `ctx`, `export default (input, ctx) => ...` / `export default function`,
+// or `module.exports = (input, ctx) => ...`. Exported callables receive
+// `(ctx.input, ctx)`. This is a convenience contract, not a sandbox.
 export type RecipeInput = {
   name: string;
   description: string;

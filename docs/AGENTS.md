@@ -18,19 +18,70 @@ export PANTRY_RESOLVE="pantry.coey.dev:$(dig +short pantry.coey.dev A | head -1)
 
 The token is never printed by the tools.
 
+## Valid recipe shape
+
+A pushed recipe must have:
+
+- `name` matching `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`
+- `description` from 5 to 500 characters
+- `inputSchema.type` equal to `object`
+- `code` present and at most 32KB
+- at least one valid capability tag, such as `text.transform` or `workspace.read`
+
+The runner accepts a bare function body that reads `ctx`, `export default (input, ctx) => ...`, `export default function`, and `module.exports = (input, ctx) => ...`. Exported callables receive `(ctx.input, ctx)`. This is convenience, not a sandbox.
+
+Copy-pasteable recipe file:
+
+```json
+{
+  "name": "TitleCaseDemo",
+  "description": "Convert input text to title case for docs examples.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" }
+    },
+    "required": ["text"]
+  },
+  "code": "export default (input) => String(input.text).toLowerCase().replace(/\\b\\w/g, (c) => c.toUpperCase());",
+  "capabilities": ["text.transform"]
+}
+```
+
 ## CLI, the universal happy path
 
 Use this from any harness, shell, cron job, or agent:
 
 ```sh
+cat > /tmp/title-case-demo.json <<'JSON'
+{
+  "name": "TitleCaseDemo",
+  "description": "Convert input text to title case for docs examples.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "text": { "type": "string" }
+    },
+    "required": ["text"]
+  },
+  "code": "export default (input) => String(input.text).toLowerCase().replace(/\\b\\w/g, (c) => c.toUpperCase());",
+  "capabilities": ["text.transform"]
+}
+JSON
+
+pantry push /tmp/title-case-demo.json
 pantry list
+pantry get TitleCaseDemo
+pantry run TitleCaseDemo --input '{"text":"hello pantry"}'
+```
+
+Other useful CLI calls:
+
+```sh
 pantry list --json
-pantry get slugify
-pantry get slugify --json
-pantry run slugify --input '{"text":"Hello Pantry"}'
-printf '{"text":"Hello Pantry"}' | pantry run slugify --input -
-pantry run slugify --input @input.json --json
-pantry push recipe.json
+pantry get TitleCaseDemo --json
+printf '{"text":"hello pantry"}' | pantry run TitleCaseDemo --input -
+pantry run TitleCaseDemo --input @input.json --json
 ```
 
 During local development:
@@ -44,13 +95,21 @@ bunx pantry list
 
 ## Pi extension
 
-Pi loads `.pi/extensions/pantry/index.ts` and exposes one `pantry` tool with four actions:
+Pi loads `.pi/extensions/pantry/index.ts` and exposes one `pantry` tool with four actions. Push and run use the same recipe shape:
+
+```json
+{"action":"push","recipe":{"name":"TitleCaseDemo","description":"Convert input text to title case for docs examples.","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"code":"export default (input) => String(input.text).toLowerCase().replace(/\\b\\w/g, (c) => c.toUpperCase());","capabilities":["text.transform"]}}
+```
+
+```json
+{"action":"run","name":"TitleCaseDemo","input":{"text":"hello pantry"}}
+```
+
+Also available:
 
 ```json
 {"action":"list"}
-{"action":"get","name":"slugify"}
-{"action":"run","name":"slugify","input":{"text":"Hello Pantry"}}
-{"action":"push","recipe":{"name":"demo","description":"...","inputSchema":{},"code":"return 1;","capabilities":[]}}
+{"action":"get","name":"TitleCaseDemo"}
 ```
 
 The Pi surface is a thin shell over the same `PantryClient` and `runRecipe` core.
@@ -67,6 +126,16 @@ export default [PantryPlugin];
 ```
 
 OpenCode gets a native `pantry` tool with the same four actions as Pi: `list`, `get`, `run`, and `push`. The plugin depends on `@opencode-ai/plugin` as an optional peer so pantry stays useful as a CLI even outside OpenCode.
+
+OpenCode push and run example:
+
+```json
+{"action":"push","recipe":{"name":"TitleCaseDemo","description":"Convert input text to title case for docs examples.","inputSchema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"code":"module.exports = (input) => String(input.text).toLowerCase().replace(/\\b\\w/g, (c) => c.toUpperCase());","capabilities":["text.transform"]}}
+```
+
+```json
+{"action":"run","name":"TitleCaseDemo","input":{"text":"hello pantry"}}
+```
 
 ## Honest run caveat
 

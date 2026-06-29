@@ -121,9 +121,9 @@
       <section class="flow cost-savings">
         <h2>Why it saves tokens</h2>
         <p>
-          A recurring task becomes <code>pantry.get(name)</code> plus a local run. The model spends about 0 reasoning tokens re-deriving the saved procedure, instead of re-reasoning the whole procedure every time. There is still discovery cost, and this only helps patterns you have already saved. Novel work still needs reasoning.
+          A recurring task becomes <code>pantry.get(name)</code> plus a local run. A model can re-derive a procedure every time and may be wrong; pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. The saving is structural. There is still discovery cost, this only helps patterns you have already saved, and novel work still needs reasoning.
         </p>
-        <p class="note">The current eval labels prompt-side token counts as estimates and pantry execution as measured local deterministic work. <a href="/proof">Read the proof</a>.</p>
+        <p class="note">The current eval labels tokenizer estimates, live model usage when available, and measured local deterministic recipe execution. <a href="/proof">Read the proof</a>.</p>
       </section>
 
       <section class="flow">

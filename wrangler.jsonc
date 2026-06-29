@@ -8,9 +8,7 @@
   "observability": { "enabled": true },
   // Only public surface is the gated custom domain; no workers.dev URL.
   "workers_dev": false,
-  "routes": [
-    { "pattern": "pantry.coey.dev", "custom_domain": true }
-  ],
+  "routes": [{ "pattern": "pantry.coey.dev", "custom_domain": true }],
   // ONE Worker serves both the API and the docs/landing site. The Worker owns
   // the API paths listed in run_worker_first (it runs the Hono app for them);
   // every other path falls through to the static site in ./app/dist.

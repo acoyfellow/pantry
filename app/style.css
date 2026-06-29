@@ -163,12 +163,20 @@ body {
   opacity: 0;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .theme-icon-moon { opacity: 1; }
-  :root:not([data-theme]) .theme-icon-sun { opacity: 0; }
+  :root:not([data-theme]) .theme-icon-moon {
+    opacity: 1;
+  }
+  :root:not([data-theme]) .theme-icon-sun {
+    opacity: 0;
+  }
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .theme-icon-sun { opacity: 1; }
-  :root:not([data-theme]) .theme-icon-moon { opacity: 0; }
+  :root:not([data-theme]) .theme-icon-sun {
+    opacity: 1;
+  }
+  :root:not([data-theme]) .theme-icon-moon {
+    opacity: 0;
+  }
 }
 
 /* ---- hero ---- */

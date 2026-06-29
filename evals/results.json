@@ -1,56 +1,82 @@
 {
-  "generatedAt": "2026-06-29T18:10:02.712Z",
-  "honesty": "No live model API was called. Prompt-from-scratch and inline-tool tokens are transparent estimates from actual prompt/procedure text using ceil(chars/4). Pantry deterministic recipe execution wall-clock and correctness are measured locally. Pantry discovery tokens are an estimate from actual list-entry text; saved code execution uses 0 model tokens.",
-  "modelCalls": false,
-  "tokenizer": "ceil(characters/4), approximate and labeled",
+  "generatedAt": "2026-06-29T20:39:44.767Z",
+  "mode": "honest-estimate",
+  "claim": "A model may re-derive a recurring procedure each time. Pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. The saving is structural.",
+  "model": null,
+  "note": null,
+  "tokenizer": "gpt-tokenizer cl100k_base for non-provider estimates",
+  "summary": {
+    "prompt-from-scratch": {
+      "totalTokens": 270,
+      "tokenBasis": "tokenizer-estimated",
+      "measuredMsTotal": null,
+      "correct": 0,
+      "tasks": 4
+    },
+    "inline-tool-def-each-time": {
+      "totalTokens": 2268,
+      "tokenBasis": "tokenizer-estimated",
+      "measuredMsTotal": null,
+      "correct": 0,
+      "tasks": 4
+    },
+    "pantry-reuse": {
+      "totalTokens": 396,
+      "tokenBasis": "tokenizer-estimated-discovery-only",
+      "measuredMsTotal": 0,
+      "correct": 4,
+      "tasks": 4
+    }
+  },
   "rows": [
     {
       "task": "slugify",
       "technique": "prompt-from-scratch",
       "tokens": {
-        "input": 56,
-        "output": 109,
-        "total": 165,
-        "basis": "estimated"
+        "input": 49,
+        "output": 0,
+        "total": 49,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "slugify",
       "technique": "inline-tool-def-each-time",
       "tokens": {
-        "input": 138,
+        "input": 173,
         "output": 0,
-        "total": 138,
-        "basis": "estimated"
+        "total": 173,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "slugify",
       "technique": "pantry-reuse",
       "tokens": {
-        "input": 42,
+        "input": 43,
         "output": 0,
-        "total": 42,
-        "basis": "estimated-discovery-only",
-        "note": "Saved code path uses 0 model tokens; discovery text is estimated from the actual recipe list entry."
+        "total": 43,
+        "basis": "tokenizer-estimated-discovery-only",
+        "tokenizer": "gpt-tokenizer cl100k_base",
+        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
       },
       "wallClockMs": {
         "value": 0,
@@ -58,56 +84,61 @@
       },
       "correct": {
         "value": true,
-        "basis": "measured-local-deterministic"
+        "basis": "deterministic-oracle-on-recipe-output"
+      },
+      "output": {
+        "sha256": "9605a3ce41a0ca5c",
+        "preview": "{\"slug\":\"pantry-cost-savings-measure-measure-share\"}"
       }
     },
     {
       "task": "verify_live_worker",
       "technique": "prompt-from-scratch",
       "tokens": {
-        "input": 85,
-        "output": 609,
-        "total": 694,
-        "basis": "estimated"
+        "input": 79,
+        "output": 0,
+        "total": 79,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "verify_live_worker",
       "technique": "inline-tool-def-each-time",
       "tokens": {
-        "input": 635,
+        "input": 684,
         "output": 0,
-        "total": 635,
-        "basis": "estimated"
+        "total": 684,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "verify_live_worker",
       "technique": "pantry-reuse",
       "tokens": {
-        "input": 163,
+        "input": 158,
         "output": 0,
-        "total": 163,
-        "basis": "estimated-discovery-only",
-        "note": "Saved code path uses 0 model tokens; discovery text is estimated from the actual recipe list entry."
+        "total": 158,
+        "basis": "tokenizer-estimated-discovery-only",
+        "tokenizer": "gpt-tokenizer cl100k_base",
+        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
       },
       "wallClockMs": {
         "value": 0,
@@ -115,56 +146,61 @@
       },
       "correct": {
         "value": true,
-        "basis": "measured-local-deterministic"
+        "basis": "deterministic-oracle-on-recipe-output"
+      },
+      "output": {
+        "sha256": "307263b629a3d696",
+        "preview": "{\"worker\":\"pantry.coey.dev\",\"note\":\"Verify-only plan. Runs nothing — print the commands and run them in a real shell. A 200 on the gated path is a FAILURE, not a pass.\",\"resolve\":{"
       }
     },
     {
       "task": "deploy_coey_worker",
       "technique": "prompt-from-scratch",
       "tokens": {
-        "input": 92,
-        "output": 1066,
-        "total": 1158,
-        "basis": "estimated"
+        "input": 82,
+        "output": 0,
+        "total": 82,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "deploy_coey_worker",
       "technique": "inline-tool-def-each-time",
       "tokens": {
-        "input": 1104,
+        "input": 1203,
         "output": 0,
-        "total": 1104,
-        "basis": "estimated"
+        "total": 1203,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "deploy_coey_worker",
       "technique": "pantry-reuse",
       "tokens": {
-        "input": 153,
+        "input": 149,
         "output": 0,
-        "total": 153,
-        "basis": "estimated-discovery-only",
-        "note": "Saved code path uses 0 model tokens; discovery text is estimated from the actual recipe list entry."
+        "total": 149,
+        "basis": "tokenizer-estimated-discovery-only",
+        "tokenizer": "gpt-tokenizer cl100k_base",
+        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
       },
       "wallClockMs": {
         "value": 0,
@@ -172,56 +208,61 @@
       },
       "correct": {
         "value": true,
-        "basis": "measured-local-deterministic"
+        "basis": "deterministic-oracle-on-recipe-output"
+      },
+      "output": {
+        "sha256": "be5698163b72fb03",
+        "preview": "{\"worker\":\"pantry\",\"domain\":\"pantry.coey.dev\",\"database\":\"pantry-db\",\"accountId\":\"example-account\",\"note\":\"Guided plan only. This recipe does NOT run wrangler or deploy. Run the st"
       }
     },
     {
       "task": "json_project_rename",
       "technique": "prompt-from-scratch",
       "tokens": {
-        "input": 66,
-        "output": 162,
-        "total": 228,
-        "basis": "estimated"
+        "input": 60,
+        "output": 0,
+        "total": 60,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "json_project_rename",
       "technique": "inline-tool-def-each-time",
       "tokens": {
-        "input": 199,
+        "input": 208,
         "output": 0,
-        "total": 199,
-        "basis": "estimated"
+        "total": 208,
+        "basis": "tokenizer-estimated",
+        "tokenizer": "gpt-tokenizer cl100k_base"
       },
       "wallClockMs": {
         "value": null,
-        "basis": "not-measured",
-        "note": "No live model call is made by this harness."
+        "basis": "not-measured"
       },
       "correct": {
         "value": null,
-        "basis": "not-measured"
+        "basis": "not-measured-without-live-model"
       }
     },
     {
       "task": "json_project_rename",
       "technique": "pantry-reuse",
       "tokens": {
-        "input": 53,
+        "input": 46,
         "output": 0,
-        "total": 53,
-        "basis": "estimated-discovery-only",
-        "note": "Saved code path uses 0 model tokens; discovery text is estimated from the actual recipe list entry."
+        "total": 46,
+        "basis": "tokenizer-estimated-discovery-only",
+        "tokenizer": "gpt-tokenizer cl100k_base",
+        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
       },
       "wallClockMs": {
         "value": 0,
@@ -229,31 +270,12 @@
       },
       "correct": {
         "value": true,
-        "basis": "measured-local-deterministic"
+        "basis": "deterministic-oracle-on-recipe-output"
+      },
+      "output": {
+        "sha256": "a90183128bf74318",
+        "preview": "{\"records\":[{\"userId\":1,\"label\":\"Ada\"}]}"
       }
     }
-  ],
-  "summary": {
-    "prompt-from-scratch": {
-      "totalTokens": 2245,
-      "tokenBasis": "estimated",
-      "measuredMsTotal": null,
-      "correctMeasured": 0,
-      "tasks": 4
-    },
-    "inline-tool-def-each-time": {
-      "totalTokens": 2076,
-      "tokenBasis": "estimated",
-      "measuredMsTotal": null,
-      "correctMeasured": 0,
-      "tasks": 4
-    },
-    "pantry-reuse": {
-      "totalTokens": 411,
-      "tokenBasis": "estimated-discovery-only",
-      "measuredMsTotal": 0,
-      "correctMeasured": 4,
-      "tasks": 4
-    }
-  }
+  ]
 }

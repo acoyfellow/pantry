@@ -52,6 +52,21 @@ describe('bounded runner', () => {
     expect(result.output).toBe(42);
   });
 
+  test('runs export default callable recipes with input and ctx', () => {
+    const result = runRecipe(
+      asFull('export default (input, ctx) => `${input.text}:${ctx.input.text.length}`;'),
+      { input: { text: 'pantry' } },
+    );
+    expect(result).toMatchObject({ ok: true, output: 'pantry:6' });
+  });
+
+  test('runs module.exports callable recipes with input and ctx', () => {
+    const result = runRecipe(asFull('module.exports = (input, ctx) => input.n + ctx.input.n;'), {
+      input: { n: 7 },
+    });
+    expect(result).toMatchObject({ ok: true, output: 14 });
+  });
+
   test('a throwing recipe is captured, not propagated', () => {
     const result = runRecipe(asFull('throw new Error("boom");'), {});
     expect(result.ok).toBe(false);

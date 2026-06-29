@@ -14,8 +14,9 @@
 // That is all it is — a convenience for code you already trust.
 //
 // What this runner does:
-//   - Runs the recipe code as a function body with a SINGLE explicit argument:
-//     a `ctx` object you construct. It is passed nothing else by name.
+//   - Accepts the common authoring shapes: a bare function body using `ctx`,
+//     `export default (input, ctx) => ...`, or `module.exports = ...`.
+//     Exported callables receive `(ctx.input, ctx)`.
 //   - Binds a handful of ambient names (`fetch`, `process`, `globalThis`, ...)
 //     to `undefined` as function parameters. This is a CONVENIENCE that trips
 //     up casual `typeof process` lookups. It is NOT containment.
@@ -68,8 +69,6 @@ const SHADOWED_PARAMS = [
   'globalThis',
   'global',
   'require',
-  'module',
-  'exports',
 ];
 
 // Tokens whose presence in recipe code most commonly indicates an attempt to
@@ -90,9 +89,24 @@ export function scanRecipeCode(code: string): string | null {
   return null;
 }
 
+function callableSource(code: string): string | null {
+  const trimmed = code.trim();
+  if (/^export\s+default\b/.test(trimmed)) {
+    return `return ${trimmed.replace(/^export\s+default\s*/, '')}`;
+  }
+  if (/^module\.exports\s*=/.test(trimmed)) {
+    return `const module = { exports: undefined }; const exports = module.exports;\n${trimmed}\nreturn module.exports;`;
+  }
+  return null;
+}
+
 // Run a fetched recipe over an explicit `ctx`. NOT a security boundary — see
-// the file header. By default the best-effort guard runs first; pass
-// `{ guard: false }` to execute the raw code unguarded.
+// the file header. Accepted code shapes are:
+//   - a bare function body that can read `ctx` and returns the output;
+//   - `export default (input, ctx) => ...` or `export default function ...`;
+//   - `module.exports = (input, ctx) => ...`.
+// Exported callables receive `(ctx.input, ctx)`. By default the best-effort
+// guard runs first; pass `{ guard: false }` to execute the raw code unguarded.
 export function runRecipe(
   recipe: FullRecipe,
   ctx: Record<string, unknown>,
@@ -115,9 +129,17 @@ export function runRecipe(
   const argValues: unknown[] = [Object.freeze({ ...ctx }), ...SHADOWED_PARAMS.map(() => undefined)];
 
   try {
-    // The recipe is treated as a function body. `'use strict'` prevents implicit
-    // globals; the shadowed names are bound to undefined in the parameter scope.
-    // None of this contains hostile code — it only shapes the convenient case.
+    // Bare recipes are treated as a function body. Export/module recipes are
+    // normalized into a callable, then called with (ctx.input, ctx). `'use strict'`
+    // and shadowed names shape the convenient case; they do not contain hostile code.
+    const source = callableSource(recipe.code);
+    if (source) {
+      const loader = new Function(...argNames, `'use strict';\n${source}`);
+      const callable = loader(...argValues);
+      if (typeof callable !== 'function') throw new Error('recipe export is not callable');
+      const output = callable((ctx as { input?: unknown }).input, Object.freeze({ ...ctx }));
+      return { ok: true, output, capabilities: recipe.capabilities };
+    }
     const factory = new Function(...argNames, `'use strict';\n${recipe.code}`);
     const output = factory(...argValues);
     return { ok: true, output, capabilities: recipe.capabilities };

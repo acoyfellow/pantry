@@ -1,6 +1,8 @@
 # pantry evals
 
-This is a small, reproducible harness for the cost-savings claim on recurring work.
+This is a small, reproducible harness for the structural pantry claim on recurring work.
+
+The claim is not that not-writing code is a fair contest against writing code. The claim is that a model may re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. Discovery still costs tokens. Novel work still needs reasoning.
 
 It compares four real recurring recipes:
 
@@ -11,34 +13,37 @@ It compares four real recurring recipes:
 
 For each task it records three techniques:
 
-1. `prompt-from-scratch`: a model would re-derive the procedure each call.
-2. `inline-tool-def-each-time`: the whole procedure is included in the prompt each call.
-3. `pantry-reuse`: fetch a saved recipe and run it deterministically.
+1. `prompt-from-scratch`: ask a model to produce the JSON result from the task description.
+2. `inline-tool-def-each-time`: include the full procedure in the prompt and ask for the JSON result.
+3. `pantry-reuse`: run the saved recipe deterministically.
 
-## What is measured
-
-`pantry-reuse` executes the actual recipe code locally and records real wall-clock milliseconds and correctness. The saved code path uses 0 model reasoning tokens because no model is asked to re-derive the procedure.
-
-## What is estimated
-
-This harness does not call a live model API. That is intentional unless you wire one in later with usage accounting. Therefore:
-
-- `prompt-from-scratch` token counts are estimates from the actual prompt plus the actual procedure text.
-- `inline-tool-def-each-time` token counts are estimates from the actual prompt containing the procedure.
-- `pantry-reuse` discovery tokens are estimates from the actual list-entry text: name, description, and input schema.
-
-The estimator is deliberately simple and labeled: `ceil(characters / 4)`. It is not a model tokenizer and should be read as an approximate size comparison, not a benchmark.
-
-## Reproduce
+## Default mode
 
 ```sh
 bun run evals
-# or
-bun evals/run.ts
 ```
 
-The command writes `evals/results.json`.
+Default mode is cheap and deterministic. It does not call a model. Prompt payloads and pantry discovery payloads are counted with `gpt-tokenizer` and labeled as tokenizer estimates. Pantry recipe execution time and correctness are measured locally. Prompt-from-scratch and inline correctness stay `not-measured-without-live-model`.
+
+## Live mode
+
+```sh
+LIVE_MODEL=1 bun run evals
+```
+
+Live mode tries a real small model for the prompt-from-scratch and inline-tool-def arms, captures provider-reported input and output tokens, stores only compact output previews plus hashes, and scores all three arms against the same deterministic oracle.
+
+Provider order is intentionally conservative:
+
+1. `OPENAI_API_KEY`, default model `gpt-4o-mini`, override with `OPENAI_MODEL`
+2. `ANTHROPIC_API_KEY`, default model `claude-3-haiku-20240307`, override with `ANTHROPIC_MODEL`
+
+If no provider is reachable, the harness does not fabricate a live result. It writes honest-estimate mode with an explicit note.
+
+## Output
+
+The command writes compact `evals/results.json`: summary totals plus rows, not full model completions.
 
 ## Limits
 
-The results are about recurring tasks that already have saved recipes. Novel work still needs reasoning. Pantry also has a per-call discovery cost: the agent has to learn a recipe exists and decide it fits. Model versions, prompts, and real provider latency will change live results.
+This applies to recurring tasks that already have saved recipes. Pantry still has discovery cost: the agent has to learn a recipe exists and decide it fits. Local deterministic wall-clock is not network latency. Model versions, prompts, and provider usage accounting will change live results.

@@ -110,7 +110,10 @@ export const deployCoeyWorkerRecipe: RecipeInput = {
     type: 'object',
     properties: {
       workerName: { type: 'string', description: 'Worker name, e.g. pantry-worker' },
-      subdomain: { type: 'string', description: 'subdomain under coey.dev, e.g. "pantry" -> pantry.coey.dev' },
+      subdomain: {
+        type: 'string',
+        description: 'subdomain under coey.dev, e.g. "pantry" -> pantry.coey.dev',
+      },
       dbName: { type: 'string', description: 'D1 database name, e.g. pantry-db' },
       accountId: { type: 'string', description: 'Cloudflare account id' },
     },

@@ -29,6 +29,7 @@
     "@opencode-ai/plugin": "1.4.6"
   },
   "dependencies": {
+    "gpt-tokenizer": "^3.4.0",
     "hono": "^4.12.25"
   },
   "author": "Jordan Coeyman (https://coey.dev)",
