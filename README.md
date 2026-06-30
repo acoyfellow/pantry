@@ -3,8 +3,8 @@
 # pantry
 
 <p align="center">
-  <strong>Exact saved code for agents.</strong><br />
-  A Cloudflare Worker and D1 recipe store that hands back exact saved code and never runs it.
+  <strong>A harness-agnostic shelf for exact saved code.</strong><br />
+  Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
 </p>
 
 <p align="center">
@@ -20,13 +20,15 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
 </p>
 
-> A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is determinism: pantry returns exact saved code and avoids re-derivation risk. It can reduce output tokens for repeated procedures, but total-token savings require sufficiently large or repeated procedures and are bounded by procedure size and repetition.
+> pantry is a durable, harness-agnostic shelf for recipes. A recipe is a named function with an input schema, capability tags, status, version, and owner provenance. pantry stores the source in D1 and hands it back on request. It never runs a recipe; the caller reviews the exact saved artifact and chooses its own execution authority.
 
 ## What It Is
 
-A recipe is a named JavaScript function with an input schema and a list of capability tags. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches a recipe and runs it in the caller's own isolate. Whether to run fetched code is the caller's trust decision.
+A recipe is a named JavaScript function with an input schema, capability tags, status, version, and owner provenance. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches the exact saved source, reviews it, and chooses the execution authority.
 
-The store is single-player first. A bearer token maps to one owner, and the default list shows only that owner's recipes. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance. Writes stay owner-scoped, and pantry still never runs a recipe.
+The store is private by default. A bearer token maps to one owner, and the default list shows only that owner's recipes. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance, version, and status. Writes stay owner-scoped, and pantry still never runs a recipe.
+
+Think extensions are runtime-local capabilities for a Think agent; pantry is a runtime-neutral code registry where any harness fetches the exact saved source and chooses its own execution authority. Runtime extensions live inside one agent. A pantry recipe is a portable artifact any harness can fetch.
 
 ## The Recipe Shape
 
@@ -55,7 +57,7 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `inputSchema` is an object whose `type` is `"object"`. It defaults to `{ "type": "object", "properties": {} }` when omitted.
 - `code` is required and must be at most 32000 bytes. pantry accepts three runner shapes: a bare JavaScript function body, an `export default` function/expression, or a `module.exports` function/expression. The demo runner calls bare bodies with one argument, `ctx`; exported callables receive `(input, ctx)`.
 - `capabilities` must list at least one tag. A tag is either a scoped namespace (`workspace.*`, `machine.*`, `cloudbox.*`) or a generic dotted tag such as `text.transform`. Tags are deduplicated and sorted.
-- `status` is `"enabled"` or `"disabled"`. Anything other than `"disabled"` becomes `"enabled"`.
+- `status` is `"pending"`, `"enabled"`, or `"disabled"`. Unknown values become `"enabled"`; the Pi push path can save pending recipes for owner approval before enabling.
 - `sourceRunId` is an optional string, otherwise `null`.
 - `visibility` is `"private"` by default. Set `"shared"` to opt your own recipe into the shared read pool.
 
@@ -102,7 +104,7 @@ pantry list --shared              # shared recipes, no code, includes author
 pantry get Name                   # own recipe wins, then shared
 ```
 
-API shape: `GET /recipes?scope=shared` lists shared recipes across owners without code and includes `author`. `GET /recipe/:name` resolves your own recipe first, then the most recently updated shared recipe with that name. Private recipes never cross owner boundaries. Provenance is informational: a shared recipe is still fetched code, and the caller decides whether and where to run it.
+API shape: `GET /recipes?scope=shared` lists shared recipes across owners without code and includes `author`, `version`, and `status`. `GET /recipe/:name` resolves your own recipe first, then the most recently updated shared recipe with that name. Private recipes never cross owner boundaries. Provenance is informational: a shared recipe is still fetched code, and the caller decides whether and where to run it.
 
 ### `POST /recipes`
 
@@ -127,7 +129,7 @@ An invalid body returns `400` with `{ "error": ..., "code": "InvalidInput" }`.
 
 ### `GET /recipes`
 
-List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the cheap discovery call. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`.
+List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the discovery call and the review-before-run entry point. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`.
 
 ```sh
 curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
@@ -138,7 +140,7 @@ curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
 
 ### `GET /recipe/:name`
 
-The full recipe, including `code`. This is the call a caller makes right before running the recipe. Your own recipe wins; if missing, pantry returns the most recently updated shared recipe with that name. Returns `404` when neither exists.
+The full recipe, including `code`. This is the call a caller makes right before reviewing and possibly running the recipe. Your own recipe wins; if missing, pantry returns the most recently updated shared recipe with that name. Returns `404` when neither exists.
 
 ```sh
 curl "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TOKEN"
@@ -156,9 +158,9 @@ curl -X DELETE "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TO
 
 ## The Pantry Agent Tool
 
-An agent reaches pantry two ways: a small client for code, or a Pi tool for a session.
+A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, my-ax through its sync bridge, or curl against the API.
 
-`src/client.ts` is a small client usable from terrarium, Pi, or a Worker. It reads `PANTRY_URL` and `PANTRY_TOKEN` from the environment by default. `list()` fails soft: an unconfigured client returns `[]` rather than throwing, so a recipe lookup degrades to "re-reason it" instead of crashing the caller.
+`src/client.ts` is a small client usable from terrarium, Pi, or a Worker. It reads `PANTRY_URL` and `PANTRY_TOKEN` from the environment by default. `list()` fails soft: an unconfigured client returns `[]` rather than throwing, so a recipe lookup degrades to ordinary reasoning instead of crashing the caller.
 
 ```ts
 import { pantry } from 'pantry'; // ./src/client.ts
@@ -187,7 +189,7 @@ await pantry.push({
 
 The Pi tool wraps that same client so a Pi or terrarium session can reach pantry without curl. It lives at `.pi/extensions/pantry/index.ts`, registers one tool named `pantry`, and exposes four actions:
 
-- `list` returns names, descriptions, input schemas, and capabilities, without `code`. This is the cheap discovery call.
+- `list` returns names, descriptions, input schemas, and capabilities, without `code`. This is the discovery call and the review-before-run entry point.
 - `get(name)` returns the full recipe including `code`. The session reads this before deciding to run anything.
 - `run(name, input)` fetches the recipe and executes its `code` over an explicit `ctx` of `{ input }`. This step runs fetched code; see below.
 - `push(recipe)` upserts a recipe in the same shape the API accepts.
@@ -248,11 +250,11 @@ Server-side defenses pantry does provide:
 - pantry never runs a recipe, so it enforces nothing about what `code` does at runtime. `capabilities` are tags for the caller to reason about, not a sandbox.
 - D1 limits apply to row size and database size.
 
-## Token Economics
+## Eval Note
 
-Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are bounded by procedure size and repetition. For small procedures, the discovery and tool-invocation overhead can make total tokens rise even when the model emits fewer output tokens.
+The main pantry claim is custody of exact reviewed artifacts across harnesses. The older eval still records a bounded token observation: fetching saved code can reduce generated output for repeated procedures, while discovery and tool-invocation overhead can make total tokens rise for small procedures.
 
-There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
+There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved artifact to fetch.
 
 The structural claim is observable: pantry hands back exact saved code, and the `evals/` harness measures local recipe execution plus tokenizer-counted payload sizes for discovery. With `LIVE_MODEL=1` and a reachable provider, the harness records provider-reported token usage and scores correctness for every arm. Without provider usage, it stays in labeled estimate mode and fabricates nothing. One exploratory prod Kimi K2.7 sample saw reuse reduce output tokens and raise total tokens for a tiny procedure because of input/tool overhead. A clean multi-sample benchmark remains open. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
 

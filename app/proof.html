@@ -4,20 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pantry — proof</title>
-    <meta name="description" content="pantry proof: exact saved-code reuse, four oracle passes, real recipes, and a runnable eval harness." />
+    <meta name="description" content="pantry proof: one recipe fetched by multiple harnesses, exact saved code, caller-owned execution, and bounded eval notes." />
     <link rel="canonical" href="https://pantry.coey.dev/proof" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="mask-icon" href="/logo.svg" color="#f7b53b" />
     <meta property="og:title" content="pantry — proof" />
-    <meta property="og:description" content="pantry returns exact saved code and avoids re-derivation risk. The eval harness uses real recipes and labels token observations." />
+    <meta property="og:description" content="pantry returns exact saved code to multiple harnesses and never executes it. Field notes show which contexts ran the same recipe." />
     <meta property="og:url" content="https://pantry.coey.dev/proof" />
     <meta property="og:type" content="article" />
     <meta property="og:image" content="https://pantry.coey.dev/logo.svg" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:image" content="https://pantry.coey.dev/logo.svg" />
     <script type="application/ld+json">
-      { "@context": "https://schema.org", "@type": "Dataset", "name": "pantry recurring recipe reuse eval", "url": "https://pantry.coey.dev/proof", "creator": { "@type": "Person", "name": "Jordan Coeyman", "url": "https://coey.dev" }, "isBasedOn": "https://github.com/acoyfellow/pantry/tree/main/evals" }
+      { "@context": "https://schema.org", "@type": "Dataset", "name": "pantry cross-harness recipe dogfood", "url": "https://pantry.coey.dev/proof", "creator": { "@type": "Person", "name": "Jordan Coeyman", "url": "https://coey.dev" }, "isBasedOn": "https://github.com/acoyfellow/pantry/tree/main/evals" }
     </script>
     <script>
       (() => { const key = "pantry-theme"; const root = document.documentElement; const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches; const stored = localStorage.getItem(key); const theme = stored === "light" || stored === "dark" ? stored : systemDark ? "dark" : "light"; root.dataset.theme = theme; root.style.colorScheme = theme; })();
@@ -27,22 +27,22 @@
   <body class="docs">
     <header class="wrap"><nav class="topnav"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span>pantry</a><div class="navlinks"><a href="/">Home</a><a href="/docs">Docs</a><a href="https://github.com/acoyfellow/pantry">GitHub</a><button class="theme-toggle" type="button" aria-label="Switch color theme" data-theme-toggle><span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span><span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span></button></div></nav></header>
     <main class="wrap doc-body">
-      <aside class="toc"><p class="eyebrow">[ proof ]</p><ul><li><a href="#result">Result</a></li><li><a href="#method">Method</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#limits">Limits</a></li></ul></aside>
+      <aside class="toc"><p class="eyebrow">[ proof ]</p><ul><li><a href="#result">Dogfood</a></li><li><a href="#method">Registry Behavior</a></li><li><a href="#numbers">Eval Aside</a></li><li><a href="#limits">Limits</a></li></ul></aside>
       <article class="doc-content">
-        <h1>Exact-code reuse, checked by a runnable harness.</h1>
-        <p class="lede">pantry stores real recipes, returns exact saved code, and keeps execution outside the service. The checked-in eval runs those recipes locally and passes the deterministic oracle for 4 of 4 tasks.</p>
+        <h1>The same saved recipe crossed harness boundaries.</h1>
+        <p class="lede">A pantry recipe is a portable artifact. The service returns exact saved code with provenance, and each caller chooses its own isolate. This proof page points at a dogfood note where one recipe was fetched and run from Pi and a plain client process, with my-ax reachability recorded separately.</p>
         <section id="result">
-          <h2>Result from this repo's eval</h2>
-          <p>The local harness covers four recurring tasks, including <code>slugify</code>, <code>verify_live_worker</code>, and <code>deploy_coey_worker</code>. Pantry recipe execution used exact saved code, measured local deterministic execution, and passed the deterministic oracle for <strong>4 of 4</strong> tasks. The prompt-from-scratch and inline-tool rows are tokenizer-measured payload sizes unless live mode records provider usage.</p>
-          <p class="note">Token observation: pantry can reduce output tokens by avoiding regenerated code, while total tokens can rise for small procedures because discovery and tool calls add input overhead. A small exploratory my-ax run, one prod Kimi K2.7 sample, showed that shape; a clean multi-sample benchmark remains open.</p>
+          <h2>Cross-harness dogfood</h2>
+          <p>The field note at <code>.context/loops/recipe-rounds/crossharness-dogfood.md</code> follows one recipe, <code>TitleCaseDemo</code>, through multiple callers. Pi used its pantry tool to list, get, and run the recipe. A plain Bun process used <code>src/client.ts</code> to fetch the same source and execute it in a separate process. The note records the exact outputs and the provenance fields visible during fetch.</p>
+          <p class="note">Measured token note, bounded to the old eval: pantry can reduce generated output for repeated procedures, while total tokens can rise for small procedures because discovery and tool calls add input overhead. That is not the product claim; the product claim here is artifact custody across harnesses.</p>
         </section>
         <section id="method">
-          <h2>What is measured</h2>
-          <p>The harness in <code>evals/run.ts</code> uses real recipes: <code>slugify</code>, <code>verify_live_worker</code>, <code>deploy_coey_worker</code>, and one deterministic JSON transform. Pantry reuse runs saved recipe code locally, records wall-clock milliseconds, and checks the output with the same oracle used for live model answers.</p>
-          <p>Default mode does not pretend to be a live model run. It uses <code>gpt-tokenizer</code> for prompt and discovery payload sizes. Live mode is gated behind <code>LIVE_MODEL=1</code> and only reports provider usage when a provider actually returns usage.</p>
+          <h2>What pantry proves at the boundary</h2>
+          <p>The registry boundary is small: list returns metadata without code; get returns the full saved source; run is outside pantry. Runtime extensions live inside one agent. A pantry recipe is a portable artifact any harness can fetch.</p>
+          <p>Think extensions are runtime-local capabilities for a Think agent; pantry is a runtime-neutral code registry where any harness fetches the exact saved source and chooses its own execution authority.</p>
         </section>
         <section id="numbers">
-          <h2>Payload sizes and measured local execution</h2>
+          <h2>Eval aside: payload sizes and local execution</h2>
           <p>This table reports tokenizer-estimated payload sizing for discovery and local eval scaffolding, plus measured local execution for pantry reuse. Provider billing appears only when live mode records provider usage.</p>
           <table class="proof-table"><thead><tr><th>Technique</th><th>Tokenizer-estimated payload tokens</th><th>Basis</th><th>Measured ms</th><th>Correctness</th></tr></thead><tbody><tr><td>prompt-from-scratch</td><td>270</td><td>estimate unless live mode records provider usage</td><td>not measured unless live</td><td>not measured unless live</td></tr><tr><td>inline-tool-def-each-time</td><td>2,268</td><td>estimate unless live mode records provider usage</td><td>not measured unless live</td><td>not measured unless live</td></tr><tr><td>pantry discovery + reuse</td><td>396</td><td>tokenizer-estimated discovery payload only; local run is deterministic code execution</td><td>0</td><td>4 / 4 measured pass</td></tr></tbody></table>
           <p>Reproduce with <code>bun run evals</code>. Try live usage with <code>LIVE_MODEL=1 bun run evals</code>. The machine-readable file is <code>evals/results.json</code> in the repo.</p>

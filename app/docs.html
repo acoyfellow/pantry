@@ -6,7 +6,7 @@
     <title>pantry — docs</title>
     <meta
       name="description"
-      content="pantry API reference: the recipe shape, /health, POST/GET /recipes, GET and DELETE /recipe/:name, the Pi tool and client, where recipes come from, security, token economics, and limits."
+      content="pantry API reference: the harness-agnostic recipe shelf, recipe shape, API, Pi tool, client, shared provenance, security, and limits."
     />
     <link rel="canonical" href="https://pantry.coey.dev/docs" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
@@ -29,7 +29,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "pantry",
-        "description": "A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts; it never runs them.",
+        "description": "A durable, harness-agnostic shelf for exact saved code. Any harness can fetch the recipe; pantry never runs it.",
         "codeRepository": "https://github.com/acoyfellow/pantry",
         "url": "https://pantry.coey.dev/docs",
         "license": "https://opensource.org/licenses/MIT",
@@ -82,7 +82,7 @@
           <li><a href="#origin">Where recipes come from</a></li>
           <li><a href="#shared">Shared pantry</a></li>
           <li><a href="#security">Security</a></li>
-          <li><a href="#economics">Token economics</a></li>
+          <li><a href="#economics">Eval note</a></li>
           <li><a href="#limits">Limits</a></li>
         </ul>
       </aside>
@@ -90,22 +90,16 @@
       <article class="doc-content">
         <h1>pantry docs</h1>
         <p class="lede">
-          pantry is a live Cloudflare Worker and D1 store for exact saved code. An agent lists
-          recipes, fetches one by name, and decides whether to run it in its own isolate.
+          pantry is a live Cloudflare Worker and D1 shelf for exact saved code. Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
         </p>
 
         <section id="what">
           <h2>What it is</h2>
           <p>
-            A recipe is a named JavaScript function body with an input schema and a list of
-            capability tags. pantry keeps recipes in D1 and hands the code back when asked. It
-            never runs a recipe. The caller fetches a recipe and runs it in the caller's own
-            isolate. Whether to run fetched code is the caller's trust decision.
+            A recipe is a named JavaScript function body with an input schema, capability tags, status, version, and owner provenance. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches a recipe, reviews the source, and chooses the execution authority.
           </p>
           <p>
-            The store is single-player by default. A bearer token maps to one owner, and an owner
-            sees its own recipes first. That is the fully working path: list, get, run locally, and
-            push recipes for yourself.
+            The store is private by default. A bearer token maps to one owner, and an owner sees its own recipes first. Shared reads are opt-in artifacts for moving code between harnesses with author provenance visible before execution.
           </p>
         </section>
 
@@ -143,7 +137,7 @@
               generic dotted tag such as <code>text.transform</code>. Tags are deduplicated and
               sorted.
             </li>
-            <li><code>status</code> is <code>"enabled"</code> or <code>"disabled"</code>. Anything other than <code>"disabled"</code> becomes <code>"enabled"</code>.</li>
+            <li><code>status</code> is <code>"pending"</code>, <code>"enabled"</code>, or <code>"disabled"</code>. Unknown values become <code>"enabled"</code>; the Pi push path can save pending recipes for owner approval before enabling.</li>
             <li><code>sourceRunId</code> is an optional string, otherwise <code>null</code>.</li>
           </ul>
           <p>
@@ -190,7 +184,7 @@
           <h3><code>GET /recipes</code></h3>
           <p>
             List recipes for the owner, ordered by <code>updatedAt</code> descending. The list
-            never includes <code>code</code>. This is the cheap discovery call.
+            never includes <code>code</code>. This is the discovery call and the review-before-run entry point.
           </p>
           <pre><code>curl "$PANTRY_URL/recipes" -H "authorization: Bearer &lt;YOUR_TOKEN&gt;"
 # {"recipes":[{"name":"slugify","description":"...","inputSchema":{...},
@@ -220,12 +214,11 @@
 
         <section id="agent">
           <h2>Use a recipe from your agent</h2>
-          <p>An agent reaches pantry two ways: a small client for code, or a Pi tool for a session.</p>
+          <p>A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, my-ax through its sync bridge, or curl against the API.</p>
           <p>
             <code>src/client.ts</code> reads <code>PANTRY_URL</code> and <code>PANTRY_TOKEN</code>
             from the environment by default. <code>list()</code> fails soft: an unconfigured
-            client returns <code>[]</code> rather than throwing, so a recipe lookup degrades to
-            "re-reason it" instead of crashing the caller.
+            client returns <code>[]</code> rather than throwing, so a recipe lookup degrades to ordinary reasoning instead of crashing the caller.
           </p>
           <pre><code>import { pantry } from 'pantry'; // ./src/client.ts
 
@@ -278,9 +271,7 @@ if (recipe) {
           <h2>Shared pantry</h2>
           <p>
             The same interface can read opt-in shared recipes by relaxing one boundary. Recipes are
-            private unless their owner marks them <code>visibility: "shared"</code>. There are no
-            new core verbs: push can set visibility, list can ask for <code>?scope=shared</code>,
-            and get still returns a full recipe.
+            private unless their owner marks them <code>visibility: "shared"</code>. There are no new core verbs: push can set visibility, list can ask for <code>?scope=shared</code>, and get still returns a full recipe. Shared list rows show author, version, and status without code.
           </p>
           <pre><code>// Publish your own recipe to the shared shelf.
 await pantry.push({ ...recipe, visibility: 'shared' });
@@ -334,18 +325,15 @@ const recipe = await pantry.get('slugify');</code></pre>
         </section>
 
         <section id="economics">
-          <h2>Token economics</h2>
+          <h2>Eval note</h2>
           <p>
-            Pantry improves determinism and avoids regenerating saved code; it can reduce output
-            tokens, but total-token savings require sufficiently large or repeated procedures and
-            are bounded by procedure size and repetition. For small procedures, discovery and tool-invocation
-            overhead can make total tokens rise.
+            The main pantry claim is custody of exact reviewed artifacts across harnesses. The older eval still records a bounded token observation: fetching saved code can reduce generated output for repeated procedures, while discovery and tool-invocation overhead can make total tokens rise for small procedures.
           </p>
           <p>
             There is still a per-call discovery cost. The model has to know a recipe exists, read
             its description and input schema, and decide it fits. <code>GET /recipes</code> keeps
             that cost low by omitting code. Novel work still needs reasoning, because there is no
-            saved recipe to reuse.
+            saved artifact to fetch.
           </p>
           <p>
             The proof page shows the current local eval. It labels prompt-side token counts as

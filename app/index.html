@@ -6,17 +6,17 @@
     <title>pantry — exact saved code for agents</title>
     <meta
       name="description"
-      content="A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts so an agent can reuse a saved recipe instead of re-deriving the same pattern. It never runs them."
+      content="A durable, harness-agnostic shelf for exact saved code. Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same recipe; pantry never runs it."
     />
     <link rel="canonical" href="https://pantry.coey.dev/" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="mask-icon" href="/logo.svg" color="#f7b53b" />
 
-    <meta property="og:title" content="pantry — a recipe store for agents" />
+    <meta property="og:title" content="pantry — a harness-agnostic shelf for recipes" />
     <meta
       property="og:description"
-      content="Store and hand back named scripts on Cloudflare Workers and D1. Reuse a recipe instead of re-deriving the pattern. pantry never runs them."
+      content="Store exact saved code with provenance. Any harness can fetch the recipe and choose its own execution authority; pantry never runs it."
     />
     <meta property="og:url" content="https://pantry.coey.dev/" />
     <meta property="og:type" content="website" />
@@ -29,7 +29,7 @@
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
         "name": "pantry",
-        "description": "A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts; it never runs them.",
+        "description": "A durable, harness-agnostic shelf for exact saved code. Any harness can fetch the recipe; pantry never runs it.",
         "codeRepository": "https://github.com/acoyfellow/pantry",
         "url": "https://pantry.coey.dev/",
         "license": "https://opensource.org/licenses/MIT",
@@ -73,13 +73,10 @@
 
     <main class="wrap">
       <section class="hero">
-        <p class="eyebrow">[ exact-code recipes for agents ]</p>
-        <h1>Agents fetch exact saved code from pantry; pantry never runs it.</h1>
+        <p class="eyebrow">[ harness-agnostic recipe shelf ]</p>
+        <h1>One recipe, exact saved code, usable from any harness.</h1>
         <p class="lede">
-          pantry is a live capability-scoped recipe store on Cloudflare Workers and D1. Your agent
-          can list, get, run locally, and push recipes through the same verbs from the CLI,
-          OpenCode, or Pi. pantry stores exact code and hands it back when asked. It never runs
-          it.
+          pantry is the durable, harness-agnostic shelf for recipes: Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same saved source. pantry never runs it. The caller reviews the artifact and chooses its own execution authority.
         </p>
 
         <div class="badges">
@@ -104,15 +101,13 @@
         <article class="card">
           <h3>The recipe shape</h3>
           <p>
-            A recipe is a named JavaScript function body with an input schema, capability tags, and
-            a private owner. pantry keeps it in D1 and returns the code verbatim when asked.
+            A recipe is a named JavaScript function body with an input schema, capability tags, status, version, and an owner. pantry keeps it in D1 and returns the code verbatim when asked.
           </p>
         </article>
         <article class="card">
-          <h3>Cheap discovery</h3>
+          <h3>Discovery without custody transfer</h3>
           <p>
-            <code>GET /recipes</code> lists your names, descriptions, schemas, and capabilities
-            without the code, so a model can decide a recipe fits before transferring the script.
+            <code>GET /recipes</code> lists names, descriptions, schemas, capabilities, status, version, and shared author provenance without transferring code. Fetch the full source only when the artifact fits.
           </p>
         </article>
         <article class="card">
@@ -125,11 +120,11 @@
       </section>
 
       <section class="flow cost-savings">
-        <h2>Why it helps</h2>
+        <h2>What pantry adds</h2>
         <p>
-          A recurring task becomes <code>pantry.get(name)</code> plus a local run. pantry hands back exact saved code, so the lead value is determinism and correctness: less re-derivation risk, with fewer generated output tokens possible for repeated procedures.
+          Runtime extensions live inside one agent. A pantry recipe is a portable artifact any harness can fetch. Think extensions are runtime-local capabilities for a Think agent; pantry is a runtime-neutral code registry where any harness fetches the exact saved source and chooses its own execution authority.
         </p>
-        <p class="note">Total-token savings are bounded by discovery and tool overhead; <a href="/proof">the proof page</a> keeps that observation with the harness and results.</p>
+        <p class="note">Reuse here means fetching the exact reviewed artifact with provenance. Capability tags are metadata for the caller, not permissions enforced by pantry.</p>
       </section>
 
       <section class="flow">
@@ -141,18 +136,15 @@ decide      caller's choice     run it, or re-reason it
 run         caller's isolate    pantry is not involved</pre>
         <p class="note">
           A saved recipe helps only for a recurring pattern. Novel work still needs reasoning,
-          because there is no saved recipe to reuse.
+          because there is no saved artifact to fetch.
         </p>
       </section>
 
       <section class="flow shared-pantry">
         <p class="eyebrow">[ opt-in shared pantry ]</p>
-        <h2>The same interface can be shared</h2>
+        <h2>Shared recipes move artifacts between harnesses</h2>
         <p>
-          Private is the default. The same interface also reads opt-in shared recipes. A recipe already
-          has an owner, so sharing relaxes one boundary: a recipe stays
-          <code>private</code> unless you push it with <code>visibility: "shared"</code> or
-          <code>pantry push --shared</code>.
+          Private is the default. Shared recipes are opt-in artifacts with author owner, version, and status visible before code fetch. A recipe stays <code>private</code> unless you push it with <code>visibility: "shared"</code> or <code>pantry push --shared</code>.
         </p>
         <pre class="ascii">
 push        visibility: "shared"   publish your own recipe
