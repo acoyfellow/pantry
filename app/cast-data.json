@@ -2,39 +2,28 @@
   "version": 2,
   "width": 80,
   "height": 24,
-  "duration": 15.5,
+  "duration": 9.5,
   "command": "/bin/bash",
-  "env": {
-    "TERM": "xterm-256color",
-    "SHELL": "/bin/bash"
-  },
+  "env": { "TERM": "xterm-256color", "SHELL": "/bin/bash" },
   "stdout": [
-    { "t": 0.0, "text": "pantry list\n" },
-    { "t": 0.5, "text": "  slugify                      slugify a title\n" },
-    { "t": 1.2, "text": "  verify_live_worker         verify worker is up\n" },
-    { "t": 2.0, "text": "  myax_workspace_grep        grep workspace for a pattern\n" },
-    { "t": 2.7, "text": "  deploy_coey_worker           deploy my worker to coey.dev\n" },
-    { "t": 3.5, "text": "\n" },
-    { "t": 4.0, "text": "pantry get slugify\n" },
+    { "t": 0.0, "text": "$ pantry list\n" },
+    { "t": 0.6, "text": "  slugify              lowercase, hyphenate, strip punctuation\n" },
+    { "t": 1.1, "text": "  verify_live_worker   plan the standard live-Worker checks\n" },
+    { "t": 1.6, "text": "  deploy_coey_worker   guided deploy to a coey.dev worker\n" },
+    { "t": 2.1, "text": "  myax_workspace_grep  grep a workspace for a pattern\n" },
+    { "t": 3.0, "text": "\n# an agent picks one it didn't write:\n" },
+    { "t": 3.6, "text": "$ pantry get slugify\n" },
     {
-      "t": 4.5,
-      "text": "export default (input) => ({ slug: String(input.title).toLowerCase().replace(/[^a-z0-9]+/g,\"-\").replace(/^-+|-+$/g,\"\") });\n"
+      "t": 4.2,
+      "text": "export default (input) => ({\n  slug: String(input.title).toLowerCase()\n    .replace(/[^a-z0-9]+/g, \"-\").replace(/^-+|-+$/g, \"\")\n});\n"
     },
-    { "t": 5.5, "text": "\n" },
-    { "t": 6.0, "text": "pantry run slugify --input '{\"title\":\"My First Pantry Recipe!\"}'\n" },
-    { "t": 6.5, "text": "# not a sandbox; running fetched code is the caller's decision\n" },
-    { "t": 7.0, "text": "# run output: {\"slug\":\"my-first-pantry-recipe\"}\n" },
-    { "t": 8.0, "text": "\n" },
-    { "t": 8.5, "text": "The pantry demo is a recorded run showing the exact steps\n" },
-    { "t": 9.0, "text": "that any harness can take to discover, fetch, and run recipes.\n" },
-    { "t": 9.5, "text": "\n" },
-    { "t": 10.0, "text": "pantry is the durable, harness-agnostic shelf for recipes.\n" },
-    { "t": 10.5, "text": "Any harness can fetch the same saved source.\n" },
-    { "t": 11.0, "text": "\n" },
+    { "t": 5.6, "text": "\n# pantry handed back exact code. it never runs it.\n" },
     {
-      "t": 11.5,
-      "text": "The caller reviews the artifact and chooses its own execution authority.\n"
+      "t": 6.2,
+      "text": "$ pantry run slugify --input '{\"title\":\"My First Pantry Recipe!\"}'\n"
     },
-    { "t": 12.5, "text": "\n" }
+    { "t": 6.8, "text": "# running in the caller's own isolate (not a sandbox)\n" },
+    { "t": 7.6, "text": "{ \"slug\": \"my-first-pantry-recipe\" }\n" },
+    { "t": 8.6, "text": "\n# same recipe, any harness: Pi, OpenCode, curl, a Worker.\n" }
   ]
 }
