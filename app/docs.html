@@ -342,7 +342,7 @@ const recipe = await pantry.get('slugify');</code></pre>
             saved recipe to reuse.
           </p>
           <p>
-            The proof page shows the current local eval. It labels prompt-side token counts as estimates because no live model API was called, and it labels pantry execution time and correctness as measured local deterministic work. The mechanism is still the claim: <code>pantry.get(name)</code> plus a local run avoids model re-derivation for the saved procedure. <a href="/proof">Read the proof</a>.
+            The proof page shows the current local eval. It labels prompt-side token counts as estimates because no live model API was called, and it labels pantry execution time and correctness as measured local deterministic work. The mechanism is still the claim: <code>pantry.get(name)</code> plus a local run avoids model re-derivation for the saved procedure. The broader agent-loop learning curve is labeled the same way across pantry and my-ax: cost per cycle should trend down as repeated work becomes a reused recipe, then flatten to a floor because discovery, matching, and novel work still cost; today that curve is a deterministic proxy <code>[5, 5, 1, 1, 1]</code>, not measured provider tokens, with measurement pending a real gateway-backed loop. <a href="/proof">Read the proof</a>.
           </p>
         </section>
 
