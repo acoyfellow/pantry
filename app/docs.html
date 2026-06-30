@@ -90,8 +90,8 @@
       <article class="doc-content">
         <h1>pantry docs</h1>
         <p class="lede">
-          A small Cloudflare Worker and D1 store of recipes, so an agent can reuse a saved recipe
-          instead of re-deriving the same pattern.
+          pantry is a live Cloudflare Worker and D1 store for exact saved code. An agent lists
+          recipes, fetches one by name, and decides whether to run it in its own isolate.
         </p>
 
         <section id="what">
@@ -338,7 +338,7 @@ const recipe = await pantry.get('slugify');</code></pre>
           <p>
             Pantry improves determinism and avoids regenerating saved code; it can reduce output
             tokens, but total-token savings require sufficiently large or repeated procedures and
-            are not broadly demonstrated. For small procedures, discovery and tool-invocation
+            are bounded by procedure size and repetition. For small procedures, discovery and tool-invocation
             overhead can make total tokens rise.
           </p>
           <p>
@@ -349,11 +349,11 @@ const recipe = await pantry.get('slugify');</code></pre>
           </p>
           <p>
             The proof page shows the current local eval. It labels prompt-side token counts as
-            estimates because no live model API was called, and it labels pantry execution time and
-            correctness as measured local deterministic work. A small exploratory my-ax run (n=1,
-            prod Kimi K2.7) saw reuse reduce output tokens but raise total tokens for a tiny
-            procedure because of input/tool overhead. A clean apples-to-apples multi-sample
-            benchmark is future work. <a href="/proof">Read the proof</a>.
+            estimates when live mode has no provider usage, and it labels pantry execution time and
+            correctness as measured local deterministic work. One exploratory prod Kimi K2.7 sample
+            saw reuse reduce output tokens and raise total tokens for a tiny procedure because of
+            input/tool overhead. A clean multi-sample benchmark remains open.
+            <a href="/proof">Read the proof</a>.
           </p>
         </section>
 

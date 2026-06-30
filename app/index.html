@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pantry — a shelf for the scripts your agents keep re-deriving</title>
+    <title>pantry — exact saved code for agents</title>
     <meta
       name="description"
       content="A capability-scoped recipe store on Cloudflare Workers and D1. It stores and hands back scripts so an agent can reuse a saved recipe instead of re-deriving the same pattern. It never runs them."
@@ -73,12 +73,13 @@
 
     <main class="wrap">
       <section class="hero">
-        <p class="eyebrow">[ single-player recipes on a shelf ]</p>
-        <h1>A private shelf for the scripts your agents keep re-deriving.</h1>
+        <p class="eyebrow">[ exact-code recipes for agents ]</p>
+        <h1>Agents fetch exact saved code from pantry; pantry never runs it.</h1>
         <p class="lede">
-          pantry is a small Cloudflare Worker and D1 store for your own recipes first. Your agent
-          can list, get, run, and push saved code instead of re-reasoning the same pattern. pantry
-          stores the code and hands it back when asked. It never runs it.
+          pantry is a live capability-scoped recipe store on Cloudflare Workers and D1. Your agent
+          can list, get, run locally, and push recipes through the same verbs from the CLI,
+          OpenCode, or Pi. pantry stores exact code and hands it back when asked. It never runs
+          it.
         </p>
 
         <div class="badges">
@@ -126,9 +127,9 @@
       <section class="flow cost-savings">
         <h2>Why it helps</h2>
         <p>
-          A recurring task becomes <code>pantry.get(name)</code> plus a local run. A model can re-derive a procedure every time and may be wrong; pantry hands back exact saved code. The defensible win is determinism and correctness: less re-derivation risk, and often fewer generated output tokens for repeated procedures.
+          A recurring task becomes <code>pantry.get(name)</code> plus a local run. pantry hands back exact saved code, so the lead value is determinism and correctness: less re-derivation risk, with fewer generated output tokens possible for repeated procedures.
         </p>
-        <p class="note">Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. In a small exploratory my-ax run (n=1, prod Kimi K2.7), reuse reduced output tokens but raised total tokens because the tiny procedure paid input/tool overhead. <a href="/proof">Read the proof</a>.</p>
+        <p class="note">Total-token savings are bounded by discovery and tool overhead; <a href="/proof">the proof page</a> keeps that observation with the harness and results.</p>
       </section>
 
       <section class="flow">
@@ -146,10 +147,10 @@ run         caller's isolate    pantry is not involved</pre>
 
       <section class="flow shared-pantry">
         <p class="eyebrow">[ opt-in shared pantry ]</p>
-        <h2>The same shelf can be shared</h2>
+        <h2>The same interface can be shared</h2>
         <p>
-          Private is the default. The same interface can also read opt-in shared recipes; it is a
-          capability, not a claim of an active network. A recipe already has an owner, so sharing relaxes one boundary: a recipe stays
+          Private is the default. The same interface also reads opt-in shared recipes. A recipe already
+          has an owner, so sharing relaxes one boundary: a recipe stays
           <code>private</code> unless you push it with <code>visibility: "shared"</code> or
           <code>pantry push --shared</code>.
         </p>

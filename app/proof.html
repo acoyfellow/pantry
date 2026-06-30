@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>pantry — proof</title>
-    <meta name="description" content="A bounded pantry eval for recurring tasks: structural saved-code reuse, live model usage when available, and labeled tokenizer estimates otherwise." />
+    <meta name="description" content="pantry proof: exact saved-code reuse, four oracle passes, real recipes, and a runnable eval harness." />
     <link rel="canonical" href="https://pantry.coey.dev/proof" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <link rel="apple-touch-icon" href="/logo.svg" />
     <link rel="mask-icon" href="/logo.svg" color="#f7b53b" />
     <meta property="og:title" content="pantry — proof" />
-    <meta property="og:description" content="The honest structural claim: pantry returns exact saved code and avoids re-derivation risk. Output tokens can fall, while total tokens can rise for small procedures." />
+    <meta property="og:description" content="pantry returns exact saved code and avoids re-derivation risk. The eval harness uses real recipes and labels token observations." />
     <meta property="og:url" content="https://pantry.coey.dev/proof" />
     <meta property="og:type" content="article" />
     <meta property="og:image" content="https://pantry.coey.dev/logo.svg" />
@@ -29,12 +29,12 @@
     <main class="wrap doc-body">
       <aside class="toc"><p class="eyebrow">[ proof ]</p><ul><li><a href="#result">Result</a></li><li><a href="#method">Method</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#limits">Limits</a></li></ul></aside>
       <article class="doc-content">
-        <h1>Proof, with labels.</h1>
-        <p class="lede">pantry's honest claim is structural: a model can re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and avoids re-derivation risk.</p>
+        <h1>Exact-code reuse, checked by a runnable harness.</h1>
+        <p class="lede">pantry stores real recipes, returns exact saved code, and keeps execution outside the service. The checked-in eval runs those recipes locally and passes the deterministic oracle for 4 of 4 tasks.</p>
         <section id="result">
-          <h2>Headline from this repo's eval</h2>
-          <p>The local harness covers four recurring tasks. In the current checked-in run, no live model provider was reachable, so prompt-from-scratch and inline-tool numbers are tokenizer-measured payload sizes rather than provider spend. Pantry recipe execution used exact saved code, measured local deterministic execution, and passed the deterministic oracle for <strong>4 of 4</strong> tasks.</p>
-          <p class="note">Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. In a small exploratory my-ax run (n=1, prod Kimi K2.7), reuse reduced output tokens but raised total tokens because the tiny procedure paid input/tool overhead. A clean apples-to-apples multi-sample benchmark is future work.</p>
+          <h2>Result from this repo's eval</h2>
+          <p>The local harness covers four recurring tasks, including <code>slugify</code>, <code>verify_live_worker</code>, and <code>deploy_coey_worker</code>. Pantry recipe execution used exact saved code, measured local deterministic execution, and passed the deterministic oracle for <strong>4 of 4</strong> tasks. The prompt-from-scratch and inline-tool rows are tokenizer-measured payload sizes unless live mode records provider usage.</p>
+          <p class="note">Token observation: pantry can reduce output tokens by avoiding regenerated code, while total tokens can rise for small procedures because discovery and tool calls add input overhead. A small exploratory my-ax run, one prod Kimi K2.7 sample, showed that shape; a clean multi-sample benchmark remains open.</p>
         </section>
         <section id="method">
           <h2>What is measured</h2>
@@ -42,12 +42,12 @@
           <p>Default mode does not pretend to be a live model run. It uses <code>gpt-tokenizer</code> for prompt and discovery payload sizes. Live mode is gated behind <code>LIVE_MODEL=1</code> and only reports provider usage when a provider actually returns usage.</p>
         </section>
         <section id="numbers">
-          <h2>Payload sizes, not total-token savings</h2>
-          <p>This table is tokenizer-estimated payload sizing for discovery and local eval scaffolding. It is not provider billing and must not be read as evidence that pantry reuse is cheaper on total tokens.</p>
+          <h2>Payload sizes and measured local execution</h2>
+          <p>This table reports tokenizer-estimated payload sizing for discovery and local eval scaffolding, plus measured local execution for pantry reuse. Provider billing appears only when live mode records provider usage.</p>
           <table class="proof-table"><thead><tr><th>Technique</th><th>Tokenizer-estimated payload tokens</th><th>Basis</th><th>Measured ms</th><th>Correctness</th></tr></thead><tbody><tr><td>prompt-from-scratch</td><td>270</td><td>estimate unless live mode records provider usage</td><td>not measured unless live</td><td>not measured unless live</td></tr><tr><td>inline-tool-def-each-time</td><td>2,268</td><td>estimate unless live mode records provider usage</td><td>not measured unless live</td><td>not measured unless live</td></tr><tr><td>pantry discovery + reuse</td><td>396</td><td>tokenizer-estimated discovery payload only; local run is deterministic code execution</td><td>0</td><td>4 / 4 measured pass</td></tr></tbody></table>
           <p>Reproduce with <code>bun run evals</code>. Try live usage with <code>LIVE_MODEL=1 bun run evals</code>. The machine-readable file is <code>evals/results.json</code> in the repo.</p>
         </section>
-        <section id="limits"><h2>Limits</h2><ul><li>This applies to recurring patterns with a saved recipe. Novel work still needs reasoning.</li><li>There is always discovery cost. The agent must inspect recipe names, descriptions, schemas, and capabilities.</li><li>Tokenizer counts are payload sizes, not provider billing, unless live mode records provider usage.</li><li>The my-ax live-provider observation is exploratory, n=1, not a reproducible benchmark; it reduced output tokens but raised total tokens for the tiny procedure tested.</li><li>Local deterministic wall-clock is not network latency and not a live model timing result.</li><li>pantry stores and hands back code. Running fetched code remains the caller's trust decision.</li></ul></section>
+        <section id="limits"><h2>Limits</h2><ul><li>This applies to recurring patterns with a saved recipe. Novel work still needs reasoning.</li><li>There is always discovery cost. The agent must inspect recipe names, descriptions, schemas, and capabilities.</li><li>Tokenizer counts are payload sizes, not provider billing, unless live mode records provider usage.</li><li>The my-ax live-provider observation is exploratory: one prod Kimi K2.7 sample reduced output tokens and raised total tokens for the tiny procedure tested.</li><li>Local deterministic wall-clock is not network latency and not a live model timing result.</li><li>pantry stores and hands back code. Running fetched code remains the caller's trust decision.</li></ul></section>
       </article>
     </main>
     <footer class="wrap site-foot"><p><a href="/">Home</a> · <a href="/docs">Docs</a> · <a href="https://github.com/acoyfellow/pantry">GitHub</a> · <a href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a></p><p class="muted">Built by Jordan Coeyman on Cloudflare Workers and D1.</p></footer>

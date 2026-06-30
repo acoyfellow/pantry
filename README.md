@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <strong>A shelf of saved recipes for agents.</strong><br />
-  A small Cloudflare Worker and D1 store, so an agent can reuse exact saved code instead of re-deriving the same pattern.
+  <strong>Exact saved code for agents.</strong><br />
+  A Cloudflare Worker and D1 recipe store that hands back exact saved code and never runs it.
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
 </p>
 
-> **TL;DR** — A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is determinism: pantry returns exact saved code and avoids re-derivation risk. It can reduce output tokens for repeated procedures, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated.
+> A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is determinism: pantry returns exact saved code and avoids re-derivation risk. It can reduce output tokens for repeated procedures, but total-token savings require sufficiently large or repeated procedures and are bounded by procedure size and repetition.
 
 ## What It Is
 
@@ -256,11 +256,11 @@ Server-side defenses pantry does provide:
 
 ## Token Economics
 
-Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. For small procedures, the discovery and tool-invocation overhead can make total tokens rise even when the model emits fewer output tokens.
+Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are bounded by procedure size and repetition. For small procedures, the discovery and tool-invocation overhead can make total tokens rise even when the model emits fewer output tokens.
 
 There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
 
-The honest claim is structural, not a benchmark: a model can re-derive a recurring procedure every time and may be wrong, while pantry hands back exact saved code. The `evals/` harness measures local recipe execution and tokenizer-counted payload sizes for discovery; it can also call a real model when `LIVE_MODEL=1` and a provider is reachable, recording provider-reported token usage and scoring correctness for every arm. Without a reachable provider it stays in a clearly labeled estimate mode and fabricates nothing. A small exploratory my-ax run (n=1, prod Kimi K2.7) saw reuse reduce output tokens but raise total tokens for a tiny procedure because of input/tool overhead. A clean apples-to-apples multi-sample benchmark is future work. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
+The structural claim is observable: pantry hands back exact saved code, and the `evals/` harness measures local recipe execution plus tokenizer-counted payload sizes for discovery. With `LIVE_MODEL=1` and a reachable provider, the harness records provider-reported token usage and scores correctness for every arm. Without provider usage, it stays in labeled estimate mode and fabricates nothing. One exploratory prod Kimi K2.7 sample saw reuse reduce output tokens and raise total tokens for a tiny procedure because of input/tool overhead. A clean multi-sample benchmark remains open. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
 
 ## Layout
 
