@@ -72,39 +72,49 @@
     </header>
 
     <main class="wrap">
-      <section class="hero">
-        <p class="eyebrow">[ harness-agnostic recipe shelf ]</p>
-        <h1>One recipe, exact saved code, usable from any harness.</h1>
-        <p class="lede">
-          pantry is the durable, harness-agnostic shelf for recipes: Pi, OpenCode, your own orchestrator or agent, curl, and a plain Worker can fetch the same saved source. pantry never runs it. The caller reviews the artifact and chooses its own execution authority.
-        </p>
-
-        <div class="badges">
-          <a class="badge badge-live" href="https://pantry.coey.dev">live: pantry.coey.dev</a>
-          <a class="badge" href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
-          <span class="badge badge-mr">0.0.1</span>
-        </div>
-
-        <div class="cta">
-          <a class="btn btn-primary" href="/docs">Read the docs</a>
-          <a class="btn" href="/proof">See the proof</a>
-          <a class="btn" href="https://github.com/acoyfellow/pantry">View on GitHub</a>
-        </div>
-
-        <figure class="cast" aria-label="A recorded run: an agent discovers a recipe, fetches its exact saved code, and runs it in its own isolate.">
-          <div class="cast-bar" aria-hidden="true">
-            <span class="cast-dot"></span><span class="cast-dot"></span><span class="cast-dot"></span>
-            <span class="cast-title">a recorded run · any harness</span>
-            <button class="cast-replay" type="button" data-cast-replay hidden>replay</button>
+      <section class="hero hero-split">
+        <div class="hero-copy">
+          <p class="eyebrow">[ harness-agnostic recipe shelf ]</p>
+          <h1>One recipe, exact saved code, usable from any harness.</h1>
+          <p class="lede">
+            pantry stores recipes and hands back the exact saved code. Pi, OpenCode, your own orchestrator, curl, and a plain Worker fetch the same source. pantry never runs it; the caller runs it in its own isolate.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="/docs">Read the docs</a>
+            <a class="btn" href="https://github.com/acoyfellow/pantry">GitHub</a>
+            <a class="btn" href="/proof">Proof</a>
           </div>
-          <pre class="cast-screen" data-cast-screen tabindex="0"></pre>
-          <figcaption class="cast-cap">Real run against <a href="https://pantry.coey.dev">pantry.coey.dev</a>. pantry hands back exact saved code; the caller runs it in its own isolate.</figcaption>
-        </figure>
-      </section>
+          <div class="badges">
+            <a class="badge badge-live" href="https://pantry.coey.dev">live: pantry.coey.dev</a>
+            <a class="badge" href="https://github.com/acoyfellow/pantry/blob/main/LICENSE">MIT</a>
+            <span class="badge badge-mr">0.0.1</span>
+          </div>
+        </div>
 
-      <!-- Pantry hero image (generated; no text baked in). Swap src to hero-a.jpg or hero-c.jpg to try the alternates. -->
-      <section class="shelf-scene">
-        <img class="hero-img" src="/hero-f1.jpg" alt="Glass jars of saved recipes on a warm wooden shelf" width="1024" height="1024" loading="eager" decoding="async" />
+        <figure class="snippet" aria-label="A real example: an agent fetches a recipe's exact saved code from pantry and runs it in its own isolate.">
+          <figcaption class="snippet-cap"><span class="snippet-dot"></span>a real run · any harness</figcaption>
+          <ol class="snippet-steps">
+            <li>
+              <span class="snippet-k">discover</span>
+              <code>pantry list  <span class="snippet-dim"># slugify, deploy_coey_worker, …</span></code>
+            </li>
+            <li>
+              <span class="snippet-k">fetch</span>
+              <code>pantry get slugify</code>
+              <pre class="snippet-code">export default (input) =&gt; ({
+  slug: String(input.title)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+});</pre>
+            </li>
+            <li>
+              <span class="snippet-k">run</span>
+              <code>pantry run slugify  <span class="snippet-dim"># in the caller's own isolate</span></code>
+              <pre class="snippet-out">{ "slug": "my-first-pantry-recipe" }</pre>
+            </li>
+          </ol>
+          <p class="snippet-foot">pantry hands back exact code. It never runs it.</p>
+        </figure>
       </section>
 
       <section class="cards">
@@ -198,37 +208,6 @@ trust       author owner            provenance on the shared row</pre>
           const storedTheme = localStorage.getItem(key);
           if (storedTheme !== "light" && storedTheme !== "dark") apply(event.matches ? "dark" : "light", false);
         });
-      })();
-    </script>
-    <script>
-      // Terminal cast player: replays a recorded run from /cast-data.json.
-      // Honest: this is a recording of a real run, not live execution.
-      (function () {
-        const screen = document.querySelector("[data-cast-screen]");
-        const replay = document.querySelector("[data-cast-replay]");
-        if (!screen) return;
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-        let timers = [];
-        const clear = () => { timers.forEach(clearTimeout); timers = []; };
-        const render = (frames) => {
-          // Static poster: the full transcript, no motion.
-          screen.textContent = frames.map((f) => f.text).join("");
-        };
-        const play = (frames) => {
-          clear();
-          screen.textContent = "";
-          frames.forEach((f) => {
-            timers.push(setTimeout(() => { screen.textContent += f.text; screen.scrollTop = screen.scrollHeight; }, f.t * 700));
-          });
-          const end = (frames[frames.length - 1]?.t ?? 0) * 700 + 400;
-          timers.push(setTimeout(() => { if (replay) replay.hidden = false; }, end));
-        };
-        fetch("/cast-data.json").then((r) => r.json()).then((cast) => {
-          const frames = cast.stdout || [];
-          if (reduce.matches) { render(frames); if (replay) { replay.hidden = false; replay.textContent = "play"; } }
-          else { play(frames); }
-          if (replay) replay.addEventListener("click", () => { replay.hidden = true; play(frames); });
-        }).catch(() => { screen.textContent = "pantry list\n  slugify\n  verify_live_worker\n  deploy_coey_worker\n\npantry get slugify -> exact code\npantry run slugify -> { \"slug\": \"my-first-pantry-recipe\" }\n"; });
       })();
     </script>
   </body>

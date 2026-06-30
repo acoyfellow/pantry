@@ -455,91 +455,110 @@ a {
   }
 }
 
-/* ── Terminal cast (recorded run on the hero) ───────────────────────────── */
-.cast {
-  margin: 1.75rem 0 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--card) 88%, #000 12%);
-  box-shadow: 0 1px 0 rgba(247, 181, 59, 0.06) inset;
-  max-width: 680px;
+/* ── Split hero: copy on the left, a glanceable snippet on the right ────── */
+.hero-split {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 2.4rem;
+  align-items: center;
 }
-.cast-bar {
+.hero-copy h1 {
+  margin-top: 0.4rem;
+}
+.hero-copy .lede {
+  margin-bottom: 1.3rem;
+}
+
+.snippet {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 86%, #000 14%);
+  overflow: hidden;
+  font-family: var(--mono);
+}
+.snippet-cap {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
-  background: color-mix(in srgb, var(--card) 70%, #000 30%);
-  border-bottom: 1px solid var(--border);
-}
-.cast-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--border);
-}
-.cast-dot:first-child {
-  background: var(--orange);
-  opacity: 0.7;
-}
-.cast-title {
-  font-family: var(--mono);
+  gap: 8px;
+  padding: 9px 14px;
   font-size: 0.72rem;
   color: var(--muted);
-  margin-left: 6px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 70%, #000 30%);
 }
-.cast-replay {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  color: var(--amber);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 9px;
-  cursor: pointer;
+.snippet-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
 }
-.cast-replay:hover {
-  border-color: var(--amber);
-}
-.cast-screen {
+.snippet-steps {
+  list-style: none;
   margin: 0;
-  padding: 14px 16px;
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--fg);
-  white-space: pre-wrap;
-  word-break: break-word;
-  /* Reserve space so autoplay typing causes no layout shift. */
-  min-height: 16.5rem;
-  max-height: 16.5rem;
-  overflow: auto;
-  background: transparent;
+  padding: 12px 14px 4px;
 }
-.cast-cap {
+.snippet-steps > li {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr;
+  gap: 0 10px;
+  align-items: baseline;
+  padding-bottom: 12px;
+}
+.snippet-k {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  text-align: right;
+  padding-top: 2px;
+}
+.snippet-steps code {
+  font-size: 0.82rem;
+  color: var(--fg);
+  word-break: break-word;
+}
+.snippet-dim {
+  color: var(--muted);
+}
+.snippet-code,
+.snippet-out {
+  grid-column: 2;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  border-radius: 7px;
+  white-space: pre;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--card) 60%, #000 40%);
+  border: 1px solid var(--border);
+}
+.snippet-out {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--border) 60%);
+}
+.snippet-foot {
+  margin: 0;
+  padding: 10px 14px 13px;
   font-family: var(--sans);
   font-size: 0.74rem;
   color: var(--muted);
-  padding: 9px 16px 12px;
   border-top: 1px solid var(--border);
 }
-.cast-cap a {
-  color: var(--amber);
-}
-@media (max-width: 560px) {
-  .cast-screen {
-    font-size: 0.74rem;
-    min-height: 15rem;
-    max-height: 15rem;
+@media (max-width: 760px) {
+  .hero-split {
+    grid-template-columns: 1fr;
+    gap: 1.6rem;
   }
-  .cast-title {
-    display: none;
+  .snippet-steps > li {
+    grid-template-columns: 3.6rem 1fr;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .cast-screen {
-    overflow: auto;
-  }
+
+.snippet-out {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: visible;
 }
