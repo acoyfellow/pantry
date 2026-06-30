@@ -10,6 +10,7 @@ Usage:
   pantry get <name> [--json]
   pantry run <name> [--input <json>|@file|-] [--json]
   pantry push <file.json> [--shared] [--json]
+  pantry mcp                                 start the MCP server over stdio
 
 Config: PANTRY_URL defaults to https://pantry.coey.dev. PANTRY_TOKEN comes from env or ~/.terrarium/pantry-token.secret.
 `;
@@ -45,6 +46,11 @@ export async function main(): Promise<void> {
   const asJson = has('--json');
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     console.log(HELP);
+    return;
+  }
+  if (cmd === 'mcp') {
+    const { runStdio } = await import('./mcp.ts');
+    await runStdio();
     return;
   }
   const { client, url } = makeClient();

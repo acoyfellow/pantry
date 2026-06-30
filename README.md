@@ -158,7 +158,9 @@ curl -X DELETE "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TO
 
 ## The Pantry Agent Tool
 
-A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, your own orchestrator through a sync bridge, or curl against the API.
+A caller reaches pantry through the same registry verbs from several harnesses: an MCP server for any MCP client, a small client for code, the Pi tool for a session, OpenCode through its plugin, your own orchestrator through a sync bridge, or curl against the API.
+
+The MCP server (`pantry mcp`) exposes `pantry_list`, `pantry_get`, `pantry_run`, and `pantry_push` over stdio, so Claude Desktop, Cursor, or another MCP client reaches the same recipes. See [docs/MCP.md](./docs/MCP.md) for the client config and the trust posture.
 
 `src/client.ts` is a small client usable from terrarium, Pi, or a Worker. It reads `PANTRY_URL` and `PANTRY_TOKEN` from the environment by default. `list()` fails soft: an unconfigured client returns `[]` rather than throwing, so a recipe lookup degrades to ordinary reasoning instead of crashing the caller.
 

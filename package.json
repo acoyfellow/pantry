@@ -29,6 +29,7 @@
     "@opencode-ai/plugin": "1.4.6"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "gpt-tokenizer": "^3.4.0",
     "hono": "^4.12.25"
   },
@@ -38,7 +39,8 @@
     "node": ">=22"
   },
   "bin": {
-    "pantry": "./bin/pantry"
+    "pantry": "./bin/pantry",
+    "pantry-mcp": "./bin/pantry-mcp"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.4.0"
