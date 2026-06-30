@@ -2,7 +2,7 @@
 
 This is a small, reproducible harness for the structural pantry claim on recurring work.
 
-The claim is not that not-writing code is a fair contest against writing code. The claim is that a model may re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. Discovery still costs tokens. Novel work still needs reasoning.
+The claim is not that not-writing code is a fair contest against writing code. The claim is that a model may re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and improves determinism. Discovery still costs tokens. Novel work still needs reasoning, and total-token savings are not broadly demonstrated.
 
 It compares four real recurring recipes:
 

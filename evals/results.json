@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-06-29T20:39:44.767Z",
   "mode": "honest-estimate",
-  "claim": "A model may re-derive a recurring procedure each time. Pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. The saving is structural.",
+  "claim": "A model may re-derive a recurring procedure each time and may be wrong. Pantry hands back exact saved code, improving determinism. It can reduce output tokens, but total-token savings are not broadly demonstrated.",
   "model": null,
   "note": null,
   "tokenizer": "gpt-tokenizer cl100k_base for non-provider estimates",
@@ -76,7 +76,7 @@
         "total": 43,
         "basis": "tokenizer-estimated-discovery-only",
         "tokenizer": "gpt-tokenizer cl100k_base",
-        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
+        "note": "exact saved-code execution; discovery text still has a model-readable payload and total-token savings are not implied."
       },
       "wallClockMs": {
         "value": 0,
@@ -138,7 +138,7 @@
         "total": 158,
         "basis": "tokenizer-estimated-discovery-only",
         "tokenizer": "gpt-tokenizer cl100k_base",
-        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
+        "note": "exact saved-code execution; discovery text still has a model-readable payload and total-token savings are not implied."
       },
       "wallClockMs": {
         "value": 0,
@@ -200,7 +200,7 @@
         "total": 149,
         "basis": "tokenizer-estimated-discovery-only",
         "tokenizer": "gpt-tokenizer cl100k_base",
-        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
+        "note": "exact saved-code execution; discovery text still has a model-readable payload and total-token savings are not implied."
       },
       "wallClockMs": {
         "value": 0,
@@ -262,7 +262,7 @@
         "total": 46,
         "basis": "tokenizer-estimated-discovery-only",
         "tokenizer": "gpt-tokenizer cl100k_base",
-        "note": "0 model tokens regenerating saved code; discovery text still has a model-readable payload."
+        "note": "exact saved-code execution; discovery text still has a model-readable payload and total-token savings are not implied."
       },
       "wallClockMs": {
         "value": 0,

@@ -223,7 +223,7 @@ for (const { recipe, input, expect } of tasks) {
       total: tokens(discovery),
       basis: 'tokenizer-estimated-discovery-only',
       tokenizer: 'gpt-tokenizer cl100k_base',
-      note: '0 model tokens regenerating saved code; discovery text still has a model-readable payload.',
+      note: 'exact saved-code execution; discovery text still has a model-readable payload and total-token savings are not implied.',
     },
     wallClockMs: { value: pantry.ms, basis: 'measured-local-deterministic' },
     correct: { value: ok, basis: 'deterministic-oracle-on-recipe-output' },
@@ -249,7 +249,7 @@ const results = {
   generatedAt: new Date().toISOString(),
   mode: liveModel ? 'live-model' : 'honest-estimate',
   claim:
-    'A model may re-derive a recurring procedure each time. Pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. The saving is structural.',
+    'A model may re-derive a recurring procedure each time and may be wrong. Pantry hands back exact saved code, improving determinism. It can reduce output tokens, but total-token savings are not broadly demonstrated.',
   model: liveModel,
   note: liveNote,
   tokenizer: 'gpt-tokenizer cl100k_base for non-provider estimates',

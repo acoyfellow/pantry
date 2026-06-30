@@ -119,11 +119,11 @@
       </section>
 
       <section class="flow cost-savings">
-        <h2>Why it saves tokens</h2>
+        <h2>Why it helps</h2>
         <p>
-          A recurring task becomes <code>pantry.get(name)</code> plus a local run. A model can re-derive a procedure every time and may be wrong; pantry hands back exact saved code and spends 0 model tokens regenerating that saved code. The saving is structural. There is still discovery cost, this only helps patterns you have already saved, and novel work still needs reasoning.
+          A recurring task becomes <code>pantry.get(name)</code> plus a local run. A model can re-derive a procedure every time and may be wrong; pantry hands back exact saved code. The defensible win is determinism and correctness: less re-derivation risk, and often fewer generated output tokens for repeated procedures.
         </p>
-        <p class="note">The dynamic learning curve is not claimed as measured here: the current my-ax dogfood curve is a deterministic proxy <code>[5, 5, 1, 1, 1]</code>, with measured provider tokens pending a real gateway-backed loop. The pantry proof labels tokenizer estimates, live model usage when available, and measured local deterministic recipe execution. <a href="/proof">Read the proof</a>.</p>
+        <p class="note">Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. In a small exploratory my-ax run (n=1, prod Kimi K2.7), reuse reduced output tokens but raised total tokens because the tiny procedure paid input/tool overhead. <a href="/proof">Read the proof</a>.</p>
       </section>
 
       <section class="flow">
@@ -134,17 +134,17 @@ fetch       GET /recipe/:name   the full recipe, including code
 decide      caller's choice     run it, or re-reason it
 run         caller's isolate    pantry is not involved</pre>
         <p class="note">
-          A saved recipe saves model tokens only for a recurring pattern. Novel work still needs
-          reasoning, because there is no saved recipe to reuse.
+          A saved recipe helps only for a recurring pattern. Novel work still needs reasoning,
+          because there is no saved recipe to reuse.
         </p>
       </section>
 
       <section class="flow shared-pantry">
-        <p class="eyebrow">[ shared pantry, multiplayer ]</p>
+        <p class="eyebrow">[ opt-in shared pantry ]</p>
         <h2>The same shelf can be shared</h2>
         <p>
-          Single-player is the default. The multiplayer move is not a rewrite or a new set of
-          verbs. A recipe already has an owner, so sharing relaxes one boundary: a recipe stays
+          Private is the default. The same interface can also read opt-in shared recipes; it is a
+          capability, not a claim of an active network. A recipe already has an owner, so sharing relaxes one boundary: a recipe stays
           <code>private</code> unless you push it with <code>visibility: "shared"</code> or
           <code>pantry push --shared</code>.
         </p>

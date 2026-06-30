@@ -272,7 +272,7 @@ if (recipe) {
         <section id="shared">
           <h2>Shared pantry</h2>
           <p>
-            The same interface can read a shared shelf by relaxing one boundary. Recipes are
+            The same interface can read opt-in shared recipes by relaxing one boundary. Recipes are
             private unless their owner marks them <code>visibility: "shared"</code>. There are no
             new core verbs: push can set visibility, list can ask for <code>?scope=shared</code>,
             and get still returns a full recipe.
@@ -331,9 +331,10 @@ const recipe = await pantry.get('slugify');</code></pre>
         <section id="economics">
           <h2>Token economics</h2>
           <p>
-            A recipe saves model tokens only for a recurring pattern. When a pattern repeats, the
-            model can call a known script instead of re-reasoning the same logic each time. That is
-            the mechanism, and it is the whole claim.
+            Pantry improves determinism and avoids regenerating saved code; it can reduce output
+            tokens, but total-token savings require sufficiently large or repeated procedures and
+            are not broadly demonstrated. For small procedures, discovery and tool-invocation
+            overhead can make total tokens rise.
           </p>
           <p>
             There is still a per-call discovery cost. The model has to know a recipe exists, read
@@ -342,7 +343,12 @@ const recipe = await pantry.get('slugify');</code></pre>
             saved recipe to reuse.
           </p>
           <p>
-            The proof page shows the current local eval. It labels prompt-side token counts as estimates because no live model API was called, and it labels pantry execution time and correctness as measured local deterministic work. The mechanism is still the claim: <code>pantry.get(name)</code> plus a local run avoids model re-derivation for the saved procedure. The broader agent-loop learning curve is labeled the same way across pantry and my-ax: cost per cycle should trend down as repeated work becomes a reused recipe, then flatten to a floor because discovery, matching, and novel work still cost; today that curve is a deterministic proxy <code>[5, 5, 1, 1, 1]</code>, not measured provider tokens, with measurement pending a real gateway-backed loop. <a href="/proof">Read the proof</a>.
+            The proof page shows the current local eval. It labels prompt-side token counts as
+            estimates because no live model API was called, and it labels pantry execution time and
+            correctness as measured local deterministic work. A small exploratory my-ax run (n=1,
+            prod Kimi K2.7) saw reuse reduce output tokens but raise total tokens for a tiny
+            procedure because of input/tool overhead. A clean apples-to-apples multi-sample
+            benchmark is future work. <a href="/proof">Read the proof</a>.
           </p>
         </section>
 

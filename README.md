@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A shelf of saved recipes for agents.</strong><br />
-  A small Cloudflare Worker and D1 store, so an agent can reuse a saved recipe instead of re-deriving the same pattern.
+  A small Cloudflare Worker and D1 store, so an agent can reuse exact saved code instead of re-deriving the same pattern.
 </p>
 
 <p align="center">
@@ -18,11 +18,11 @@
 <p align="center">
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white" />
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-Bun-000?logo=bun&logoColor=white" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-50%20passing-3fb950" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-bun%20test-3fb950" />
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue" />
 </p>
 
-> **TL;DR** — A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is structural: a recurring task becomes `get(name)` plus a local run, spending **0 model tokens regenerating the saved code**.
+> **TL;DR** — A recipe is a named function with an input schema and capability tags. pantry stores it in D1 and hands the code back on request. It never runs a recipe; the caller runs fetched code in its own isolate. The win is determinism: pantry returns exact saved code and avoids re-derivation risk. It can reduce output tokens for repeated procedures, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated.
 
 ## What It Is
 
@@ -55,13 +55,13 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `name` must match `/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/`. One name per owner.
 - `description` is 5 to 500 characters.
 - `inputSchema` is an object whose `type` is `"object"`. It defaults to `{ "type": "object", "properties": {} }` when omitted.
-- `code` is required, is a JavaScript function body, and must be at most 32000 bytes. The runner calls it with one argument, `ctx`.
+- `code` is required and must be at most 32000 bytes. pantry accepts three runner shapes: a bare JavaScript function body, an `export default` function/expression, or a `module.exports` function/expression. The demo runner calls bare bodies with one argument, `ctx`; exported callables receive `(input, ctx)`.
 - `capabilities` must list at least one tag. A tag is either a scoped namespace (`workspace.*`, `machine.*`, `cloudbox.*`) or a generic dotted tag such as `text.transform`. Tags are deduplicated and sorted.
 - `status` is `"enabled"` or `"disabled"`. Anything other than `"disabled"` becomes `"enabled"`.
 - `sourceRunId` is an optional string, otherwise `null`.
 - `visibility` is `"private"` by default. Set `"shared"` to opt your own recipe into the shared read pool.
 
-The `code` field receives a single `ctx` object and returns a plain value. The demo runner accepts the shapes an agent naturally authors: a bare function body that reads `ctx`, an `export default (ctx) => ...` (or `export default function`), or a `module.exports = ...`. The sample in `examples/sample-recipe.ts` reads `ctx.input.text` and returns `{ slug }`.
+The `code` field returns a plain value. The demo runner accepts the shapes an agent naturally authors: a bare function body that reads `ctx`, an `export default (input, ctx) => ...` (or `export default function run(input, ctx)`), or a `module.exports = (input, ctx) => ...`. The sample in `examples/sample-recipe.ts` uses the bare-body shape, reads `ctx.input.text`, and returns `{ slug }`.
 
 ## How To Use It
 
@@ -92,7 +92,7 @@ curl "$PANTRY_URL/health"
 ```
 
 
-### Shared pantry (multiplayer)
+### Shared pantry (opt-in)
 
 Single-player remains the default. Shared pantry widens reads only, with no new core verbs:
 
@@ -252,11 +252,11 @@ Server-side defenses pantry does provide:
 
 ## Token Economics
 
-A recipe saves model tokens only for a recurring pattern. When a pattern repeats, the model can call a known script instead of re-reasoning the same logic each time. That is the mechanism, and it is the whole claim.
+Pantry improves determinism and avoids regenerating saved code; it can reduce output tokens, but total-token savings require sufficiently large or repeated procedures and are not broadly demonstrated. For small procedures, the discovery and tool-invocation overhead can make total tokens rise even when the model emits fewer output tokens.
 
 There is still a per-call discovery cost. The model has to know a recipe exists, read its description and input schema, and decide it fits. `GET /recipes` keeps that cost low by omitting code, so discovery transfers names, descriptions, schemas, and capabilities rather than full scripts. Novel work still needs reasoning, because there is no saved recipe to reuse.
 
-The honest claim is structural, not a benchmark: a model can re-derive a recurring procedure every time and may be wrong, while pantry hands back exact saved code and spends 0 model tokens regenerating it. The `evals/` harness measures the pantry path and the tokenizer-counted payload sizes of the from-scratch alternatives; it can also call a real model when `LIVE_MODEL=1` and a provider is reachable, recording provider-reported token usage and scoring correctness for every arm. Without a reachable provider it stays in a clearly labeled estimate mode and fabricates nothing. The broader my-ax agent-loop claim is labeled the same way: cost per cycle should trend down as repeated work becomes a reused recipe, then flatten to a floor because discovery, matching, and novel work still cost; today the checked-in curve is a deterministic proxy `[5, 5, 1, 1, 1]`, not measured provider tokens, with measurement pending a real gateway-backed loop. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
+The honest claim is structural, not a benchmark: a model can re-derive a recurring procedure every time and may be wrong, while pantry hands back exact saved code. The `evals/` harness measures local recipe execution and tokenizer-counted payload sizes for discovery; it can also call a real model when `LIVE_MODEL=1` and a provider is reachable, recording provider-reported token usage and scoring correctness for every arm. Without a reachable provider it stays in a clearly labeled estimate mode and fabricates nothing. A small exploratory my-ax run (n=1, prod Kimi K2.7) saw reuse reduce output tokens but raise total tokens for a tiny procedure because of input/tool overhead. A clean apples-to-apples multi-sample benchmark is future work. The live writeup is at [pantry.coey.dev/proof](https://pantry.coey.dev/proof).
 
 ## Layout
 
