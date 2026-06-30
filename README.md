@@ -1,12 +1,6 @@
-<p align="center">
-  <img src=".github/assets/logo.svg" alt="pantry" width="72" height="72" />
-</p>
+<img src=".github/assets/hero.jpg" alt="Glowing amber jars on a dark shelf" width="100%" />
 
 # pantry
-
-<p align="center">
-  <img src=".github/assets/hero.jpg" alt="Glass jars of saved recipes on a warm wooden shelf" width="440" />
-</p>
 
 <p align="center">
   <strong>Exact saved code for agents.</strong><br />
