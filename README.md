@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A harness-agnostic shelf for exact saved code.</strong><br />
-  Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
+  Pi, OpenCode, your own orchestrator or agent, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
 </p>
 
 <p align="center">
@@ -158,7 +158,7 @@ curl -X DELETE "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TO
 
 ## The Pantry Agent Tool
 
-A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, my-ax through its sync bridge, or curl against the API.
+A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, your own orchestrator through a sync bridge, or curl against the API.
 
 `src/client.ts` is a small client usable from terrarium, Pi, or a Worker. It reads `PANTRY_URL` and `PANTRY_TOKEN` from the environment by default. `list()` fails soft: an unconfigured client returns `[]` rather than throwing, so a recipe lookup degrades to ordinary reasoning instead of crashing the caller.
 
@@ -216,14 +216,14 @@ A recipe reaches pantry one of two ways.
 
 The direct way is a `POST /recipes`, by curl, the client, or the Pi tool's `push`. `examples/recipes/` holds recipes authored this way, such as `deploy_coey_worker`, a guided plan for deploying a coey.dev Worker with D1.
 
-The other way is the my-ax bridge, which lives in the my-ax repo (a separate repository, not part of pantry) at `src/pantry-sync.ts`. my-ax keeps its own `saved_recipes` in D1, and the bridge maps each row to a pantry `POST /recipes` body: `name`, `description`, `inputSchema` from the stored JSON, `code`, and `capabilities` from the stored JSON. The bridge is deliberately narrow:
+The other way is a sync bridge from your own orchestrator. An orchestrator that keeps its own saved recipes in a store maps each one to a pantry `POST /recipes` body: `name`, `description`, `inputSchema` from the stored JSON, `code`, and `capabilities` from the stored JSON. A well-behaved bridge is deliberately narrow:
 
-- Additive. Nothing in my-ax's request path calls it; a caller opts in.
+- Additive. Nothing in the orchestrator's request path calls it; a caller opts in.
 - Env-gated. It reads `PANTRY_URL` (default `https://pantry.coey.dev`) and `PANTRY_TOKEN`. With no token it logs a no-op and returns.
 - Enabled-only. It pushes a recipe only when its status is `enabled`, and skips the rest.
-- Fail-soft. A network error, a rejected recipe, or a malformed row is logged and skipped. The sync never throws into a my-ax flow.
+- Fail-soft. A network error, a rejected recipe, or a malformed row is logged and skipped. The sync never throws into the orchestrator's flow.
 
-The capability tags carry across unchanged. my-ax writes `workspace.*`, `machine.*`, and `cloudbox.*` tags; pantry stores them verbatim and grants nothing. The tag is something a fetching caller reasons about, not a permission pantry enforces. The token travels only in the `Authorization` header and is never logged.
+The capability tags carry across unchanged. An orchestrator might write `workspace.*`, `machine.*`, or `cloudbox.*` tags; pantry stores them verbatim and grants nothing. The tag is something a fetching caller reasons about, not a permission pantry enforces. The token travels only in the `Authorization` header and is never logged.
 
 ## Security
 

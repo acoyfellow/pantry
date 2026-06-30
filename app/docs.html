@@ -90,7 +90,7 @@
       <article class="doc-content">
         <h1>pantry docs</h1>
         <p class="lede">
-          pantry is a live Cloudflare Worker and D1 shelf for exact saved code. Pi, OpenCode, my-ax, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
+          pantry is a live Cloudflare Worker and D1 shelf for exact saved code. Pi, OpenCode, your own orchestrator or agent, curl, and a plain Worker can fetch the same recipe; pantry never runs it.
         </p>
 
         <section id="what">
@@ -214,7 +214,7 @@
 
         <section id="agent">
           <h2>Use a recipe from your agent</h2>
-          <p>A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, my-ax through its sync bridge, or curl against the API.</p>
+          <p>A caller reaches pantry through the same registry verbs from several harnesses: a small client for code, the Pi tool for a session, OpenCode through its plugin, your own orchestrator through a sync bridge, or curl against the API.</p>
           <p>
             <code>src/client.ts</code> reads <code>PANTRY_URL</code> and <code>PANTRY_TOKEN</code>
             from the environment by default. <code>list()</code> fails soft: an unconfigured
@@ -256,14 +256,14 @@ if (recipe) {
             this way.
           </p>
           <p>
-            The other way is the my-ax bridge, which lives in the my-ax repo, a separate repository
-            that is not part of pantry. my-ax keeps its own saved recipes in D1, and the bridge
-            maps each row to a pantry <code>POST /recipes</code> body. The bridge is deliberately
-            narrow: additive (nothing in my-ax's request path calls it; a caller opts in),
-            env-gated (with no token it logs a no-op and returns), enabled-only (it pushes a recipe
-            only when its status is <code>enabled</code>), and fail-soft (a network error, a
-            rejected recipe, or a malformed row is logged and skipped). The token travels only in
-            the <code>Authorization</code> header and is never logged.
+            The other way is a sync bridge from your own orchestrator. An orchestrator that keeps
+            its own saved recipes maps each one to a pantry <code>POST /recipes</code> body. A
+            well-behaved bridge is narrow: additive (nothing in the orchestrator's request path
+            calls it; a caller opts in), env-gated (with no token it logs a no-op and returns),
+            enabled-only (it pushes a recipe only when its status is <code>enabled</code>), and
+            fail-soft (a network error, a rejected recipe, or a malformed row is logged and
+            skipped). The token travels only in the <code>Authorization</code> header and is never
+            logged.
           </p>
         </section>
 
