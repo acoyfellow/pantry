@@ -25,11 +25,11 @@
       <aside class="toc"><p class="eyebrow">[ proof ]</p><ul><li><a href="#result">Result</a></li><li><a href="#method">Method</a></li><li><a href="#numbers">Numbers</a></li><li><a href="#limits">Limits</a></li></ul></aside>
       <article class="doc-content">
         <h1>Proof, with labels.</h1>
-        <p class="lede">pantry's honest claim is structural: a model can re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and spends 0 model tokens regenerating that saved code.</p>
+        <p class="lede">pantry's honest claim is structural: a model can re-derive a recurring procedure every time and may be wrong; pantry hands back exact saved code and spends about 0 model tokens regenerating that saved code.</p>
         <section id="result">
           <h2>Headline from this repo's eval</h2>
           <p>The local harness covers four recurring tasks. In the current checked-in run, no live model provider was reachable, so prompt-from-scratch and inline-tool numbers are tokenizer-measured payload sizes rather than provider spend. Pantry recipe execution used <strong>0 tokens regenerating saved code</strong>, measured local deterministic execution, and passed the deterministic oracle for <strong>4 of 4</strong> tasks.</p>
-          <p class="note">When <code>LIVE_MODEL=1</code> reaches a provider, <code>evals/results.json</code> records provider-reported input and output tokens plus scored correctness for all three arms. When it cannot, it says so and stays in honest-estimate mode. The dynamic my-ax learning curve is likewise only a deterministic proxy <code>[5, 5, 1, 1, 1]</code> until a real gateway-backed loop records provider token usage.</p>
+          <p class="note">The structural claim now has a live-provider backing measurement from the my-ax saved-recipe loop: real Workers AI Kimi K2.7 on 2026-06-29 cut output tokens about 72% when the same procedure was reused as saved code instead of regenerated. A 2026-06-30 fresh-session attribution run measured 394 output tokens deriving from scratch and 157 via <code>recipe.run</code>, while total tokens rose for that tiny procedure because invoking the recipe added input/tool overhead.</p>
         </section>
         <section id="method">
           <h2>What is measured</h2>
