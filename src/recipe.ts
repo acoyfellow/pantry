@@ -4,7 +4,7 @@
 // recipe pushed to pantry are the same shape. pantry stores and hands these
 // back; it never runs the `code`.
 
-export const RECIPE_STATUSES = ['enabled', 'disabled'] as const;
+export const RECIPE_STATUSES = ['pending', 'enabled', 'disabled'] as const;
 export type RecipeStatus = (typeof RECIPE_STATUSES)[number];
 export const RECIPE_VISIBILITIES = ['private', 'shared'] as const;
 export type RecipeVisibility = (typeof RECIPE_VISIBILITIES)[number];
@@ -126,7 +126,8 @@ export function validateRecipeInput(input: unknown): RecipeInput {
   const inputSchema = cleanInputSchema(body.inputSchema);
   const code = cleanCode(body.code);
   const capabilities = cleanCapabilities(body.capabilities);
-  const status: RecipeStatus = body.status === 'disabled' ? 'disabled' : 'enabled';
+  const status: RecipeStatus =
+    body.status === 'pending' ? 'pending' : body.status === 'disabled' ? 'disabled' : 'enabled';
   const visibility: RecipeVisibility = body.visibility === 'shared' ? 'shared' : 'private';
   const sourceRunId =
     typeof body.sourceRunId === 'string' && body.sourceRunId.trim()

@@ -32,7 +32,7 @@
 // stale-DNS possibility and the two documented workarounds, and supports
 // PANTRY_RESOLVE / PANTRY_URL overrides so the caller can recover deliberately.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,6 +66,23 @@ function loadToken(): string | undefined {
 
 function resolvedUrl(): string {
   return (process.env.PANTRY_URL?.trim() || DEFAULT_URL).replace(/\/$/, '');
+}
+
+function pendingApprovalPath(name: string): string {
+  return join(homedir(), '.pi', 'agent', 'pantry-pending', `${name}.json`);
+}
+
+function writePendingApproval(name: string, recipe: Record<string, unknown>) {
+  const path = pendingApprovalPath(name);
+  mkdirSync(join(homedir(), '.pi', 'agent', 'pantry-pending'), { recursive: true });
+  const receipt = {
+    note: 'Owner-gated pantry push. Review this recipe, then re-push with trustMode="auto" or PANTRY_AUTOTRUST=1 to enable it.',
+    savedAt: new Date().toISOString(),
+    recipe,
+  };
+  if (!existsSync(path))
+    writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
+  else writeFileSync(path, `${JSON.stringify(receipt, null, 2)}\n`);
 }
 
 // Build a fetch that honours a `host:ip` pin (PANTRY_RESOLVE), the in-process
@@ -157,6 +174,12 @@ const PARAMS = Type.Object({
   shared: Type.Optional(
     Type.Boolean({ description: 'push only: set recipe.visibility to shared.' }),
   ),
+  trustMode: Type.Optional(
+    StringEnum(['gated', 'auto'] as const, {
+      description:
+        "push only: default 'gated' saves pending for owner approval; 'auto' explicitly pushes enabled.",
+    }),
+  ),
   recipe: Type.Optional(
     Type.Unknown({
       description:
@@ -177,6 +200,7 @@ export type PantryToolInput = {
   input?: unknown;
   scope?: 'owner' | 'shared';
   shared?: boolean;
+  trustMode?: 'gated' | 'auto';
   recipe?: unknown;
   guard?: boolean;
 };
@@ -197,7 +221,7 @@ export default function pantryExtension(pi: ExtensionAPI) {
       '  the runner shadows ambient names and runs a best-effort tripwire, but import()/the',
       '  Function-constructor climb/string-built names all escape it. Untrusted recipes need a',
       '  real isolate (Worker Loader, separate Worker, child process, vetted sandbox).',
-      '- push(recipe): upsert a recipe ({name,description,inputSchema,code,capabilities[],visibility?}). Pass shared=true to publish your own recipe to the shared read pool.',
+      '- push(recipe): upsert a recipe ({name,description,inputSchema,code,capabilities[],visibility?}). Default write gating saves status=pending for owner confirmation. Pass trustMode="auto" or set PANTRY_AUTOTRUST=1 to push enabled. Pass shared=true to publish your own recipe to the shared read pool.',
       '',
       'Config: PANTRY_URL (default https://pantry.coey.dev), PANTRY_TOKEN (env or',
       '~/.terrarium/pantry-token.secret; never printed). Stale local DNS can make plain fetch throw',
@@ -298,15 +322,29 @@ export default function pantryExtension(pi: ExtensionAPI) {
         try {
           const pushed = { ...(recipe as Record<string, unknown>) };
           if ((params as PantryToolInput).shared) pushed.visibility = 'shared';
+          const autoTrust =
+            (params as PantryToolInput).trustMode === 'auto' ||
+            process.env.PANTRY_AUTOTRUST === '1';
+          pushed.status = autoTrust ? 'enabled' : 'pending';
           const saved = await client.push(pushed as Parameters<typeof client.push>[0]);
+          if (!autoTrust) writePendingApproval(saved.name, pushed);
           return {
             content: [
               {
                 type: 'text',
-                text: `Pushed '${saved.name}' v${saved.version} to ${url}.`,
+                text: autoTrust
+                  ? `Pushed '${saved.name}' v${saved.version} to ${url} as enabled (auto-trust opt-in).`
+                  : `Pushed '${saved.name}' v${saved.version} to ${url} as pending. Owner approval required before normal reuse; review ${pendingApprovalPath(saved.name)} and re-push with trustMode="auto" to enable.`,
               },
             ],
-            details: { action, url, name: saved.name, version: saved.version },
+            details: {
+              action,
+              url,
+              name: saved.name,
+              version: saved.version,
+              trustMode: autoTrust ? 'auto' : 'gated',
+              status: pushed.status,
+            },
           };
         } catch (err) {
           throw new Error(describeError(err, url));
