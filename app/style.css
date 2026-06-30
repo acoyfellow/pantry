@@ -113,11 +113,10 @@ body {
   text-decoration: none;
 }
 .brand-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: linear-gradient(160deg, var(--amber), var(--orange));
-  box-shadow: 0 0 0 2px rgba(247, 181, 59, 0.18);
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: url("/logo.svg") center / cover no-repeat;
 }
 .navlinks {
   display: inline-flex;

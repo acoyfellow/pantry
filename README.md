@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/logo.svg" alt="pantry" width="72" height="72" />
+</p>
+
 # pantry
 
 <p align="center">
