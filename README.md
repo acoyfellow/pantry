@@ -26,7 +26,7 @@
 
 A recipe is a named JavaScript function with an input schema, capability tags, status, version, and owner provenance. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches the exact saved source, reviews it, and chooses the execution authority.
 
-The store is private by default. A bearer token maps to one owner, and the default list shows only that owner's recipes. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance, version, and status. Writes stay owner-scoped, and pantry still never runs a recipe.
+The store is private by default. A bearer token maps to one owner, and the default list shows only that owner's recipes. Many owners can share one deployment: set `PANTRY_TOKENS` to a JSON map of `{ "<token>": "<owner>" }` and each token authenticates as its own owner (single-tenant `PANTRY_TOKEN` + `PANTRY_OWNER` remain the fallback). A private recipe never crosses an owner boundary. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance, version, and status. Writes stay owner-scoped, and pantry still never runs a recipe.
 
 Think extensions are runtime-local capabilities for a Think agent; pantry is a runtime-neutral code registry where any harness fetches the exact saved source and chooses its own execution authority. Runtime extensions live inside one agent. A pantry recipe is a portable artifact any harness can fetch.
 
@@ -127,9 +127,13 @@ curl -X POST "$PANTRY_URL/recipes" \
 
 An invalid body returns `400` with `{ "error": ..., "code": "InvalidInput" }`.
 
+A valid push runs a best-effort lint and returns any `warnings` alongside `name` and `version`. It flags code that will not run deterministically (`Math.random`, `Date.now`, `new Date`, `fetch`, and similar) and a bare function body that reads `input` instead of `ctx.input`. The lint is a coarse token scan, not a proof: a clean lint does not guarantee a recipe is deterministic, and a recipe can defeat the scan. It does not reject by default; add `?strict=1` to reject a recipe that fails the lint with a `422`.
+
 ### `GET /recipes`
 
 List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the discovery call and the review-before-run entry point. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`.
+
+Filter discovery so its cost stays bounded by relevance as the cookbook grows: `?q=` matches a keyword over name and description, and `?capability=` matches a capability tag. Filters compose with `?scope=`, and the list still never includes `code`.
 
 ```sh
 curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
