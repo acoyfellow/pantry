@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/client.ts",
     "./recipe": "./src/recipe.ts",
+    "./runtime": "./src/runtime.ts",
     "./opencode": "./extensions/opencode/index.ts"
   },
   "scripts": {
