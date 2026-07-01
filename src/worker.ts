@@ -14,6 +14,10 @@ export type Env = {
   PANTRY_TOKEN?: string;
   // Optional fixed owner for single-tenant deploys; defaults to the token-derived owner.
   PANTRY_OWNER?: string;
+  // Optional multi-owner map: a JSON object { "<bearer-token>": "<owner>" }. A
+  // wrangler secret. Each token maps to its own owner for a shared multi-owner
+  // deployment. When set, tokens here take precedence; PANTRY_TOKEN stays a fallback.
+  PANTRY_TOKENS?: string;
   // Static-site binding. The SAME Worker serves the docs/landing site from
   // ./app/dist for any path the API does not own. Optional so the API logic
   // and its tests run unchanged without an assets binding present.
@@ -30,6 +34,21 @@ function isApiPath(pathname: string): boolean {
 }
 
 type Vars = { owner: string };
+
+// Parse the optional PANTRY_TOKENS JSON map into [token, owner] pairs. Returns
+// null when unset/empty/malformed so the single-token path remains the fallback.
+function parseTokenMap(raw: string | undefined): Array<[string, string]> | null {
+  if (!raw?.trim()) return null;
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const pairs = Object.entries(obj)
+      .filter(([token, owner]) => token && typeof owner === 'string' && owner.trim())
+      .map(([token, owner]) => [token, (owner as string).toLowerCase()] as [string, string]);
+    return pairs.length ? pairs : null;
+  } catch {
+    return null;
+  }
+}
 
 // Constant-time string compare. Avoids leaking token length/prefix via timing.
 function timingSafeEqual(a: string, b: string): boolean {
@@ -79,17 +98,31 @@ app.get('/health', (c) => c.json({ ok: true, service: 'pantry' }));
 // Bearer-token gate, fail-closed. No token configured => everything 503 (never
 // silently open). Wrong/missing token => 401. Constant-time compare.
 app.use('*', async (c, next) => {
-  const configured = c.env.PANTRY_TOKEN;
-  if (!configured) {
-    return c.json({ error: 'pantry is not configured: PANTRY_TOKEN missing' }, 503);
+  // Multi-owner: PANTRY_TOKENS is an optional JSON map { "<token>": "<owner>" }.
+  // Each token maps to its own owner, so many owners share one deployment with
+  // strict per-owner isolation. Single-tenant fallback: PANTRY_TOKEN + PANTRY_OWNER.
+  // Fail-closed: with no tokens configured at all, every authed route is 503.
+  const single = c.env.PANTRY_TOKEN;
+  const multi = parseTokenMap(c.env.PANTRY_TOKENS);
+  if (!single && !multi) {
+    return c.json({ error: 'pantry is not configured: PANTRY_TOKEN/PANTRY_TOKENS missing' }, 503);
   }
   const header = c.req.header('authorization') ?? '';
   const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
-  if (!presented || !timingSafeEqual(presented, configured)) {
+  let owner: string | null = null;
+  // Constant-time check against every configured token; a match yields its owner.
+  if (multi) {
+    for (const [token, mappedOwner] of multi) {
+      if (presented && timingSafeEqual(presented, token)) owner = mappedOwner;
+    }
+  }
+  if (owner === null && single && presented && timingSafeEqual(presented, single)) {
+    owner = (c.env.PANTRY_OWNER ?? 'default').toLowerCase();
+  }
+  if (owner === null) {
     return c.json({ error: 'unauthorized' }, 401);
   }
-  // Owner scoping: a token maps to one owner. Single-tenant by default.
-  c.set('owner', (c.env.PANTRY_OWNER ?? 'default').toLowerCase());
+  c.set('owner', owner);
   await next();
 });
 

@@ -324,3 +324,93 @@ describe('routes round-trip', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('https://app.test');
   });
 });
+
+describe('F3: multi-owner trust (token -> owner) with cross-owner isolation', () => {
+  const ALICE = 'alice-token-aaa';
+  const BOB = 'bob-token-bbb';
+  function multiEnv(db: FakeD1): Env {
+    return {
+      DB: db as unknown as D1Database,
+      PANTRY_TOKEN: undefined,
+      PANTRY_OWNER: undefined,
+      PANTRY_TOKENS: JSON.stringify({ [ALICE]: 'alice', [BOB]: 'bob' }),
+    } as Env;
+  }
+  const as = (token: string, path: string, init: { method?: string; body?: string } = {}) => {
+    const headers = new Headers();
+    headers.set('authorization', `Bearer ${token}`);
+    headers.set('origin', 'https://app.test');
+    if (init.body) headers.set('content-type', 'application/json');
+    return new Request(`https://pantry.test${path}`, { ...init, headers });
+  };
+
+  test('distinct tokens map to distinct owners; a bad token is 401', async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    const bad = await app.fetch(as('nope-token', '/recipes'), env);
+    expect(bad.status).toBe(401);
+    const ok = await app.fetch(as(ALICE, '/recipes'), env);
+    expect(ok.status).toBe(200);
+  });
+
+  test("alice CANNOT see or fetch bob's PRIVATE recipe (isolation)", async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    // bob pushes a private recipe
+    await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'bobsecret' }),
+      }),
+      env,
+    );
+    // alice lists (owner scope) — must NOT include bob's private
+    const aliceList = (await (await app.fetch(as(ALICE, '/recipes'), env)).json()) as {
+      recipes: Array<{ name: string }>;
+    };
+    expect(aliceList.recipes.map((r) => r.name)).not.toContain('bobsecret');
+    // alice tries to GET bob's private by name — must 404 (not leak)
+    const aliceGet = await app.fetch(as(ALICE, '/recipe/bobsecret'), env);
+    expect(aliceGet.status).toBe(404);
+  });
+
+  test("alice CAN read+run bob's SHARED recipe and sees bob as author", async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'bobshared', visibility: 'shared' }),
+      }),
+      env,
+    );
+    const shared = (await (await app.fetch(as(ALICE, '/recipes?scope=shared'), env)).json()) as {
+      recipes: Array<{ name: string; author: string }>;
+    };
+    const entry = shared.recipes.find((r) => r.name === 'bobshared');
+    expect(entry).toBeTruthy();
+    expect(entry?.author).toBe('bob');
+    const full = (await (await app.fetch(as(ALICE, '/recipe/bobshared'), env)).json()) as {
+      code: string;
+      author: string;
+    };
+    expect(full.code).toBe(sample.code);
+    expect(full.author).toBe('bob');
+  });
+
+  test("alice CANNOT delete bob's recipe (owner-scoped writes)", async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'bobowned' }),
+      }),
+      env,
+    );
+    const del = await app.fetch(as(ALICE, '/recipe/bobowned', { method: 'DELETE' }), env);
+    expect(del.status).toBe(404); // alice has no such recipe to delete; bob's is untouched
+    const bobStill = await app.fetch(as(BOB, '/recipe/bobowned'), env);
+    expect(bobStill.status).toBe(200);
+  });
+});
