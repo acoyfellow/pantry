@@ -92,3 +92,9 @@ test('REGRESSION: export default (input, ctx) shape still runs', () => {
   expect(r.ok).toBe(true);
   expect(r.output).toEqual({ doubled: 42 });
 });
+
+test('DANE: namespace-object binding { machine: { shell } } resolves', async () => {
+  const r = recipe(`export default async () => (await machine.shell({ command: "ls" })).stdout`, ['machine.shell']);
+  const out = await (runRecipe(r, { input: {}, bindings: { machine: { shell: async () => ({ stdout: 'ok' }) } } as any }).output as Promise<unknown>);
+  expect(out).toBe('ok');
+});

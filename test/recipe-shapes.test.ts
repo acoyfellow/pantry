@@ -60,3 +60,13 @@ test('HONEST failure: export default of a non-function is rejected', () => {
   expect(r.ok).toBe(false);
   expect(r.error).toContain('not a function');
 });
+
+test('DANE: leading comment before export default is still callable', () => {
+  const code = '// disk health check\nexport default (input) => ({ y: input.x + 1 })';
+  expect(classifyRecipe(code).kind).toBe('callable');
+  expect(runRecipe(mk(code), { input: { x: 41 } }).output).toEqual({ y: 42 });
+});
+test('DANE: block comment before export default is still callable', () => {
+  const code = '/* header */ export default (input) => ({ y: input.x * 2 })';
+  expect(runRecipe(mk(code), { input: { x: 21 } }).output).toEqual({ y: 42 });
+});

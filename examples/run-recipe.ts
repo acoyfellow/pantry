@@ -77,7 +77,10 @@ export type CheckResult = {
 // by passing an implementation in `ctx.bindings`. Binding is the consumer's
 // authority: pantry never executes, and providing a binding is the harness's
 // explicit choice. Proven portable across harnesses in E-WIDEN-2.
-export type Bindings = Record<string, (...args: unknown[]) => unknown>;
+// A binding value is either a function (`{'machine.shell': fn}` or `{shell: fn}`)
+// or a namespace object (`{machine: {shell: fn}}`) — both forms are accepted.
+type BindingValue = ((...args: unknown[]) => unknown) | Record<string, (...args: unknown[]) => unknown>;
+export type Bindings = Record<string, BindingValue>;
 
 // The host interfaces a recipe requires are its DECLARED capabilities — the
 // authoritative list my-ax already infers from the recipe's actual bridge calls
@@ -178,25 +181,43 @@ function isCallableNode(node: { type: string }): boolean {
   return node.type === 'ArrowFunctionExpression' || node.type === 'FunctionExpression' || node.type === 'FunctionDeclaration';
 }
 
+// Strip leading line/block comments + whitespace so shape detection sees the
+// first real token (recipes commonly open with a description comment).
+function stripLeadingTrivia(code: string): string {
+  let s = code.trimStart();
+  for (;;) {
+    if (s.startsWith('//')) {
+      const nl = s.indexOf('\n');
+      s = nl === -1 ? '' : s.slice(nl + 1).trimStart();
+    } else if (s.startsWith('/*')) {
+      const end = s.indexOf('*/');
+      s = end === -1 ? '' : s.slice(end + 2).trimStart();
+    } else {
+      return s;
+    }
+  }
+}
+
 export function classifyRecipe(code: string): RecipeShape {
   const trimmed = code.trim();
+  const lead = stripLeadingTrivia(trimmed);
   // export default / module.exports need module parsing; a bare body is not a
   // valid module/script on its own (top-level return), so try shapes in order.
-  if (/^export\s+default\b/.test(trimmed)) {
+  if (/^export\s+default\b/.test(lead)) {
     let program: any;
     try {
-      program = acornParse(trimmed, { ecmaVersion: 'latest', sourceType: 'module' });
+      program = acornParse(lead, { ecmaVersion: 'latest', sourceType: 'module' });
     } catch (e) {
       return { kind: 'invalid', reason: `export default did not parse: ${(e as Error).message}` };
     }
     const decl = program.body.find((n: any) => n.type === 'ExportDefaultDeclaration');
     const value = decl?.declaration;
     if (value && (isCallableNode(value) || value.type === 'Identifier' || value.type === 'CallExpression')) {
-      return { kind: 'callable', source: `return ${trimmed.replace(/^export\s+default\s*/, '')}` };
+      return { kind: 'callable', source: `return ${lead.replace(/^export\s+default\s*/, '')}` };
     }
     return { kind: 'invalid', reason: 'export default value is not a function' };
   }
-  if (/^module\s*\.\s*exports\s*=/.test(trimmed)) {
+  if (/^module\s*\.\s*exports\s*=/.test(lead)) {
     return {
       kind: 'callable',
       source: `const module = { exports: undefined }; const exports = module.exports;\n${trimmed}\nreturn module.exports;`,
@@ -269,21 +290,28 @@ export function runRecipe(
   // reads these by name; the harness chose the implementations.
   const boundCtx: Record<string, unknown> = { ...ctx };
   const nsObjects: Record<string, Record<string, unknown>> = {};
-  for (const [key, fn] of Object.entries(bindings)) {
+  const bareFns: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(bindings)) {
     if (key.includes('.')) {
+      // Dotted key: `machine.shell` -> nsObjects.machine.shell.
       const [ns, method] = key.split('.');
-      (nsObjects[ns] ??= {})[method] = fn;
-    } else {
-      boundCtx[key] = fn;
+      (nsObjects[ns] ??= {})[method] = value;
+    } else if (typeof value === 'function') {
+      // Bare function: `shell` -> a callable name.
+      bareFns[key] = value;
+    } else if (value && typeof value === 'object') {
+      // Namespace object: `{ machine: { shell: fn } }` -> merge into nsObjects.
+      nsObjects[key] = { ...(nsObjects[key] ?? {}), ...(value as Record<string, unknown>) };
     }
   }
+  for (const [name, fn] of Object.entries(bareFns)) boundCtx[name] = fn;
   for (const [ns, methods] of Object.entries(nsObjects)) boundCtx[ns] = methods;
 
-  const bindingNames = Object.keys(bindings).filter((k) => !k.includes('.'));
+  const bareNames = Object.keys(bareFns);
   const namespaceNames = Object.keys(nsObjects);
-  const injected = [...bindingNames, ...namespaceNames];
+  const injected = [...bareNames, ...namespaceNames];
   const injectedValues = [
-    ...bindingNames.map((k) => bindings[k]),
+    ...bareNames.map((k) => bareFns[k]),
     ...namespaceNames.map((ns) => nsObjects[ns]),
   ];
 
