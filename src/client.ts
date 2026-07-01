@@ -47,9 +47,15 @@ export class PantryClient {
 
   // Fail-soft: an unconfigured client lists nothing rather than erroring, so a
   // recipe lookup degrades to "re-reason it" instead of crashing the caller.
-  async list(options: { scope?: 'owner' | 'shared' } = {}): Promise<RecipeListEntry[]> {
+  async list(
+    options: { scope?: 'owner' | 'shared'; q?: string; capability?: string } = {},
+  ): Promise<RecipeListEntry[]> {
     if (!this.configured) return [];
-    const suffix = options.scope === 'shared' ? '?scope=shared' : '';
+    const params = new URLSearchParams();
+    if (options.scope === 'shared') params.set('scope', 'shared');
+    if (options.q) params.set('q', options.q);
+    if (options.capability) params.set('capability', options.capability);
+    const suffix = params.toString() ? `?${params}` : '';
     const res = await this.fetchImpl(`${this.url}/recipes${suffix}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`pantry list failed: ${res.status}`);
     const body = (await res.json()) as { recipes: RecipeListEntry[] };

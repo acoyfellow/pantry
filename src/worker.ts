@@ -3,6 +3,7 @@ import {
   RecipeError,
   type RecipeRow,
   fullRecipe,
+  lintRecipeCode,
   listEntry,
   validateRecipeInput,
 } from './recipe.ts';
@@ -104,6 +105,10 @@ function handleError(error: unknown): Response {
 app.post('/recipes', async (c) => {
   try {
     const parsed = validateRecipeInput(await c.req.json().catch(() => null));
+    const warnings = lintRecipeCode(parsed.code);
+    if (warnings.length && c.req.query('strict') === '1') {
+      return c.json({ error: 'recipe failed strict lint', code: 'LintFailed', warnings }, 422);
+    }
     const owner = c.get('owner');
     const now = new Date().toISOString();
     const existing = await c.env.DB.prepare(
@@ -147,7 +152,10 @@ app.post('/recipes', async (c) => {
       )
       .run();
 
-    return c.json({ name: parsed.name, version }, existing ? 200 : 201);
+    return c.json(
+      { name: parsed.name, version, ...(warnings.length ? { warnings } : {}) },
+      existing ? 200 : 201,
+    );
   } catch (error) {
     return handleError(error);
   }
@@ -155,21 +163,35 @@ app.post('/recipes', async (c) => {
 
 // GET /recipes — list WITHOUT code. Cheap discovery.
 // Default scope is owner-only. ?scope=shared lists opt-in shared recipes from all owners.
+// ?q= filters by keyword over name+description; ?capability= filters by a capability tag.
+// Filters keep discovery cost bounded by relevance, not cookbook size.
 app.get('/recipes', async (c) => {
   const owner = c.get('owner');
   const scope = c.req.query('scope');
-  if (scope === 'shared') {
-    const { results = [] } = await c.env.DB.prepare(
-      "SELECT * FROM recipes WHERE visibility = 'shared' ORDER BY updated_at DESC",
-    ).all<RecipeRow>();
-    return c.json({ recipes: results.map(listEntry) });
+  const q = c.req.query('q')?.trim().toLowerCase();
+  const capability = c.req.query('capability')?.trim();
+  const sql =
+    scope === 'shared'
+      ? "SELECT * FROM recipes WHERE visibility = 'shared' ORDER BY updated_at DESC"
+      : 'SELECT * FROM recipes WHERE owner = ? ORDER BY updated_at DESC';
+  const stmt = scope === 'shared' ? c.env.DB.prepare(sql) : c.env.DB.prepare(sql).bind(owner);
+  const { results = [] } = await stmt.all<RecipeRow>();
+  let filtered = results;
+  if (q) {
+    filtered = filtered.filter(
+      (r) => r.name.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q),
+    );
   }
-  const { results = [] } = await c.env.DB.prepare(
-    'SELECT * FROM recipes WHERE owner = ? ORDER BY updated_at DESC',
-  )
-    .bind(owner)
-    .all<RecipeRow>();
-  return c.json({ recipes: results.map(listEntry) });
+  if (capability) {
+    filtered = filtered.filter((r) => {
+      try {
+        return (JSON.parse(r.capabilities_json) as string[]).includes(capability);
+      } catch {
+        return false;
+      }
+    });
+  }
+  return c.json({ recipes: filtered.map(listEntry) });
 });
 
 // GET /recipe/:name — full recipe INCLUDING code. The fetch a caller runs.

@@ -119,6 +119,38 @@ function cleanCode(value: unknown): string {
 }
 
 // Validate a full recipe push. Throws RecipeError('InvalidInput') on any failure.
+// Best-effort push-time lint. NOT a proof of determinism or safety: it is a
+// coarse token scan (like scanRecipeCode) that a recipe can defeat, and a
+// clean lint does not guarantee a recipe is deterministic. It surfaces the
+// failure modes the research measured (E5 non-determinism, E3 input-contract),
+// as WARNINGS for the owner to weigh — it does not reject.
+export function lintRecipeCode(code: string): string[] {
+  const warnings: string[] = [];
+  const nondet: Array<[RegExp, string]> = [
+    [/\bMath\.random\b/, 'Math.random'],
+    [/\bDate\.now\b/, 'Date.now'],
+    [/\bnew Date\b/, 'new Date'],
+    [/\bperformance\.now\b/, 'performance.now'],
+    [/\bcrypto\.randomUUID\b/, 'crypto.randomUUID'],
+    [/\bfetch\s*\(/, 'fetch'],
+  ];
+  const hits = nondet.filter(([re]) => re.test(code)).map(([, name]) => name);
+  if (hits.length) {
+    warnings.push(
+      `determinism: code references ${hits.join(', ')} — output may differ across runs/agents, so it is not safe to share as a deterministic recipe. Best-effort scan, not a proof.`,
+    );
+  }
+  // Input-contract check: a bare function body (no export default / module.exports)
+  // is run as `(ctx) => body`, so it must read ctx.input. Bare `input` is undefined.
+  const isExported = /\bexport\s+default\b/.test(code) || /\bmodule\.exports\b/.test(code);
+  if (!isExported && /(^|[^.\w])input\b/.test(code) && !/\bctx\.input\b/.test(code)) {
+    warnings.push(
+      'contract: a bare function body receives `ctx` and must read ctx.input; this code references bare `input`, which is undefined at run time. Use ctx.input, or export default (input, ctx) => ...',
+    );
+  }
+  return warnings;
+}
+
 export function validateRecipeInput(input: unknown): RecipeInput {
   const body = assertObject(input, 'recipe');
   const name = cleanName(body.name);

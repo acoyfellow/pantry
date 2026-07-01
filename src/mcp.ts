@@ -46,12 +46,16 @@ export function createPantryMcpServer(opts: { client?: Pantry; url?: string } = 
     {
       title: 'List recipes',
       description:
-        'List recipe names, descriptions, input schemas, and capability tags. Never returns code. Use scope "shared" to list opt-in shared recipes from other owners.',
-      inputSchema: { scope: z.enum(['owner', 'shared']).optional() },
+        'List recipe names, descriptions, input schemas, and capability tags. Never returns code. Use scope "shared" to list opt-in shared recipes from other owners. Filter with q (keyword over name+description) or capability (a capability tag) so discovery stays cheap as the cookbook grows.',
+      inputSchema: {
+        scope: z.enum(['owner', 'shared']).optional(),
+        q: z.string().optional(),
+        capability: z.string().optional(),
+      },
     },
-    async ({ scope }) => {
+    async ({ scope, q, capability }) => {
       try {
-        const recipes = await client.list(scope === 'shared' ? { scope: 'shared' } : undefined);
+        const recipes = await client.list({ scope, q, capability });
         return ok(recipes);
       } catch (err) {
         return fail(describeError(err, url));

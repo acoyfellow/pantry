@@ -125,6 +125,83 @@ describe('routes round-trip', () => {
     expect(full.author).toBe('default');
   });
 
+  test('F1: ?q= filters by keyword and ?capability= filters by tag, code excluded', async () => {
+    await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), env);
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          name: 'deployWorker',
+          description: 'deploy a worker',
+          capabilities: ['machine.deploy'],
+        }),
+      }),
+      env,
+    );
+    const byQ = (await (await app.fetch(req('/recipes?q=slug'), env)).json()) as {
+      recipes: Array<{ name: string }>;
+    };
+    expect(byQ.recipes.map((r) => r.name)).toEqual(['slugify']);
+    const byCap = (await (
+      await app.fetch(req('/recipes?capability=machine.deploy'), env)
+    ).json()) as { recipes: Array<{ name: string }> };
+    expect(byCap.recipes.map((r) => r.name)).toEqual(['deployWorker']);
+    const all = (await (await app.fetch(req('/recipes'), env)).json()) as {
+      recipes: Array<Record<string, unknown>>;
+    };
+    expect(all.recipes).toHaveLength(2);
+    expect('code' in all.recipes[0]).toBe(false);
+  });
+
+  test('F2: push lint warns on non-determinism and bad input-contract; pure recipe is clean', async () => {
+    const rnd = await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          name: 'randy',
+          code: 'export default () => ({ v: Math.random() })',
+        }),
+      }),
+      env,
+    );
+    const rndBody = (await rnd.json()) as { warnings?: string[] };
+    expect(rndBody.warnings?.[0]).toContain('determinism');
+
+    const bad = await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'badcontract', code: 'return { v: input.text };' }),
+      }),
+      env,
+    );
+    const badBody = (await bad.json()) as { warnings?: string[] };
+    expect(badBody.warnings?.[0]).toContain('contract');
+
+    const pure = await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      env,
+    );
+    expect('warnings' in ((await pure.json()) as object)).toBe(false);
+  });
+
+  test('F2: ?strict=1 rejects a recipe that fails the lint', async () => {
+    const res = await app.fetch(
+      req('/recipes?strict=1', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          name: 'strictfail',
+          code: 'export default () => ({ v: Math.random() })',
+        }),
+      }),
+      env,
+    );
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { code: string }).code).toBe('LintFailed');
+  });
+
   test('shared scope lists shared recipes across owners with author and without code', async () => {
     const db = new FakeD1();
     await app.fetch(
