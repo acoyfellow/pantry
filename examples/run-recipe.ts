@@ -47,13 +47,80 @@ export type RunResult = {
   capabilities: string[];
   // Set when the best-effort parse-time guard rejected the code before running.
   rejectedByGuard?: boolean;
+  // Set when the interface pre-flight refused because a required host binding
+  // was missing. Carries the honest requires/missing breakdown (E-WIDEN-3).
+  missingBindings?: string[];
 };
 
 export type RunOptions = {
   // Run the best-effort parse-time guard before executing. Default: true.
   // This is a tripwire, not a sandbox — see the file header.
   guard?: boolean;
+  // Pre-flight the recipe's required host interfaces against the bindings the
+  // caller provides (ctx.bindings). Default: true. When a required interface is
+  // missing, `runRecipe` refuses HONESTLY instead of failing with a late,
+  // opaque TypeError. Proven in E-WIDEN-3. Set false to skip the pre-flight.
+  check?: boolean;
 };
+
+// The result of pre-flighting a recipe against a set of provided bindings.
+// `requires` is the set of host interfaces the code calls (best-effort scan);
+// `missing` is those not satisfied by the provided bindings.
+export type CheckResult = {
+  ok: boolean;
+  requires: string[];
+  missing: string[];
+};
+
+// Host namespaces a recipe may call. A recipe that calls e.g. `shell({...})` or
+// `machine.shell({...})` declares an INTERFACE the CONSUMING harness satisfies
+// by passing an implementation in `ctx.bindings`. Binding is the consumer's
+// authority: pantry never executes, and providing a binding is the harness's
+// explicit choice. Proven portable across harnesses in E-WIDEN-2.
+export type Bindings = Record<string, (...args: unknown[]) => unknown>;
+
+// The host interfaces a recipe requires are its DECLARED capabilities — the
+// authoritative list my-ax already infers from the recipe's actual bridge calls
+// (`machine.shell`, `workspace.read`). We do NOT re-infer them from a greedy
+// code scan: a scan cannot tell a host call (`machine.shell(...)`) from a local
+// method call (`out.stdout.trim()`) or a keyword (`export default (...)`). The
+// declared capabilities ARE the contract; a code scan is only used to sanity
+// them (kody steal #3, an acorn AST pass, is the future precise upgrade).
+//
+// A capability is a HOST INTERFACE if it names a known host namespace
+// (`machine.*`, `workspace.*`, `cloudbox.*`) or is a bare interface name the
+// caller can bind. Purely descriptive capabilities without a host namespace are
+// treated as non-binding and never block a run.
+const HOST_NAMESPACES = new Set(['machine', 'workspace', 'cloudbox']);
+export function requiredInterfaces(recipe: FullRecipe): string[] {
+  return [...new Set(recipe.capabilities.filter((cap) => {
+    const [ns, method] = cap.split('.');
+    // `<ns>.none` is the explicit "pure, needs no host binding" sentinel; never
+    // a requirement. Bare capability names (no namespace) are descriptive tags,
+    // not host interfaces, so they don't demand a binding either.
+    if (!cap.includes('.')) return false;
+    if (method === 'none') return false;
+    return HOST_NAMESPACES.has(ns);
+  }))].sort();
+}
+
+// Pre-flight a recipe against the provided bindings. A binding key may be a bare
+// name (`shell`) or a namespaced one (`machine.shell`); a `machine.shell`
+// requirement is satisfied by either a `machine.shell` binding or a `machine`
+// namespace object exposing `shell`. Missing required interfaces are reported
+// honestly, using the recipe's DECLARED capabilities as the contract.
+export function checkRecipe(recipe: FullRecipe, bindings: Bindings = {}): CheckResult {
+  const provided = new Set(Object.keys(bindings));
+  const requires = requiredInterfaces(recipe);
+  const missing = requires.filter((iface) => {
+    if (provided.has(iface)) return false;
+    const [ns] = iface.split('.');
+    // A namespace object binding (e.g. `machine`) satisfies `machine.*` calls.
+    if (iface.includes('.') && provided.has(ns)) return false;
+    return true;
+  });
+  return { ok: missing.length === 0, requires, missing };
+}
 
 // Ambient names we shadow as a CONVENIENCE so a casual `typeof process` lookup
 // returns undefined. These are passed as function parameters bound to
@@ -125,8 +192,54 @@ export function runRecipe(
     }
   }
 
-  const argNames = ['ctx', ...SHADOWED_PARAMS];
-  const argValues: unknown[] = [Object.freeze({ ...ctx }), ...SHADOWED_PARAMS.map(() => undefined)];
+  // The consuming harness supplies host-interface implementations in
+  // ctx.bindings. Binding is the consumer's authority (pantry never executes).
+  const bindings = (ctx as { bindings?: Bindings }).bindings ?? {};
+
+  // Interface pre-flight (E-WIDEN-3): refuse honestly BEFORE running if the
+  // recipe calls a host interface the caller did not bind, instead of failing
+  // later with an opaque `x is not a function` TypeError.
+  if (options.check !== false) {
+    const preflight = checkRecipe(recipe, bindings);
+    if (!preflight.ok) {
+      return {
+        ok: false,
+        error: `recipe requires host interface(s) [${preflight.requires.join(', ')}]; missing [${preflight.missing.join(', ')}]. Provide them via ctx.bindings, or pass { check: false } to run anyway.`,
+        capabilities: recipe.capabilities,
+        missingBindings: preflight.missing,
+      };
+    }
+  }
+
+  // Expose each provided binding as a callable name AND rebuild namespace
+  // objects (a `machine.shell` binding becomes `machine.shell`). The recipe
+  // reads these by name; the harness chose the implementations.
+  const boundCtx: Record<string, unknown> = { ...ctx };
+  const nsObjects: Record<string, Record<string, unknown>> = {};
+  for (const [key, fn] of Object.entries(bindings)) {
+    if (key.includes('.')) {
+      const [ns, method] = key.split('.');
+      (nsObjects[ns] ??= {})[method] = fn;
+    } else {
+      boundCtx[key] = fn;
+    }
+  }
+  for (const [ns, methods] of Object.entries(nsObjects)) boundCtx[ns] = methods;
+
+  const bindingNames = Object.keys(bindings).filter((k) => !k.includes('.'));
+  const namespaceNames = Object.keys(nsObjects);
+  const injected = [...bindingNames, ...namespaceNames];
+  const injectedValues = [
+    ...bindingNames.map((k) => bindings[k]),
+    ...namespaceNames.map((ns) => nsObjects[ns]),
+  ];
+
+  const argNames = ['ctx', ...SHADOWED_PARAMS, ...injected];
+  const argValues: unknown[] = [
+    Object.freeze({ ...boundCtx }),
+    ...SHADOWED_PARAMS.map(() => undefined),
+    ...injectedValues,
+  ];
 
   try {
     // Bare recipes are treated as a function body. Export/module recipes are
@@ -137,7 +250,7 @@ export function runRecipe(
       const loader = new Function(...argNames, `'use strict';\n${source}`);
       const callable = loader(...argValues);
       if (typeof callable !== 'function') throw new Error('recipe export is not callable');
-      const output = callable((ctx as { input?: unknown }).input, Object.freeze({ ...ctx }));
+      const output = callable((ctx as { input?: unknown }).input, Object.freeze({ ...boundCtx }));
       return { ok: true, output, capabilities: recipe.capabilities };
     }
     const factory = new Function(...argNames, `'use strict';\n${recipe.code}`);
