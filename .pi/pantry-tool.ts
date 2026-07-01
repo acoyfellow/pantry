@@ -43,12 +43,12 @@ import { Type } from 'typebox';
 // Reuse the existing client + runner from the pantry repo. This extension lives
 // at <repo>/.pi/extensions/pantry/index.ts, so the repo root is three dirs up.
 const HERE = fileURLToPath(new URL('.', import.meta.url));
-const REPO_ROOT = join(HERE, '..', '..', '..');
+const REPO_ROOT = join(HERE, '..');
 
 // Imported lazily inside execute() so a load-time import failure never breaks
 // the whole extension runtime; surfaced as a tool error instead.
-type ClientModule = typeof import('../../../src/client.ts');
-type RunnerModule = typeof import('../../../examples/run-recipe.ts');
+type ClientModule = typeof import('../src/client.ts');
+type RunnerModule = typeof import('../examples/run-recipe.ts');
 
 const DEFAULT_URL = 'https://pantry.coey.dev';
 const TOKEN_FILE = join(homedir(), '.terrarium', 'pantry-token.secret');
