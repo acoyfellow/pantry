@@ -21,7 +21,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { runRecipe } from '../examples/run-recipe.ts';
+import { runRecipe, checkRecipe } from '../examples/run-recipe.ts';
 import { RUN_CAVEAT, describeError, makeClient } from './surface.ts';
 
 type TextResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
@@ -93,6 +93,16 @@ export function createPantryMcpServer(opts: { client?: Pantry; url?: string } = 
       try {
         const recipe = await client.get(name);
         if (!recipe) return fail(`recipe not found: ${name}`);
+        // Pre-flight the recipe's required host interfaces (E-WIDEN-3). This MCP
+        // server provides no host bindings, so a recipe that requires e.g.
+        // machine.shell is refused HONESTLY, naming what it needs, rather than
+        // failing with an opaque runtime error. Pure recipes run as before.
+        const preflight = checkRecipe(recipe);
+        if (!preflight.ok) {
+          return fail(
+            `recipe '${name}' requires host interface(s) [${preflight.requires.join(', ')}] that this MCP server does not provide (missing [${preflight.missing.join(', ')}]). Run it in a harness that binds those interfaces.`,
+          );
+        }
         const result = runRecipe(recipe, { input: input ?? {} });
         return ok({ caveat: RUN_CAVEAT, result });
       } catch (err) {

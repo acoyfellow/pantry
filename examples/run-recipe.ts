@@ -156,15 +156,68 @@ export function scanRecipeCode(code: string): string | null {
   return null;
 }
 
-function callableSource(code: string): string | null {
+import { parse as acornParse } from 'acorn';
+
+// Classify a recipe's code shape with a real AST parse (kody steal #3) instead
+// of brittle regexes. Shapes:
+//   - 'callable': the code EXPORTS or IS a single callable expression
+//     (`export default (input,ctx)=>...`, `export default function...`,
+//     `module.exports = ...`, or a bare arrow/function EXPRESSION `async ()=>{}`).
+//     runRecipe calls it with (ctx.input, ctx). A bare arrow expression used to
+//     be silently discarded and return undefined — the AST catches it and runs it.
+//   - 'body': a bare function body (statements that `return` the output),
+//     run as `(ctx, ...) => { <code> }`.
+//   - 'invalid': does not parse, or an export/module form whose value is not a
+//     function — rejected HONESTLY, never silently.
+type RecipeShape =
+  | { kind: 'callable'; source: string }
+  | { kind: 'body' }
+  | { kind: 'invalid'; reason: string };
+
+function isCallableNode(node: { type: string }): boolean {
+  return node.type === 'ArrowFunctionExpression' || node.type === 'FunctionExpression' || node.type === 'FunctionDeclaration';
+}
+
+export function classifyRecipe(code: string): RecipeShape {
   const trimmed = code.trim();
+  // export default / module.exports need module parsing; a bare body is not a
+  // valid module/script on its own (top-level return), so try shapes in order.
   if (/^export\s+default\b/.test(trimmed)) {
-    return `return ${trimmed.replace(/^export\s+default\s*/, '')}`;
+    let program: any;
+    try {
+      program = acornParse(trimmed, { ecmaVersion: 'latest', sourceType: 'module' });
+    } catch (e) {
+      return { kind: 'invalid', reason: `export default did not parse: ${(e as Error).message}` };
+    }
+    const decl = program.body.find((n: any) => n.type === 'ExportDefaultDeclaration');
+    const value = decl?.declaration;
+    if (value && (isCallableNode(value) || value.type === 'Identifier' || value.type === 'CallExpression')) {
+      return { kind: 'callable', source: `return ${trimmed.replace(/^export\s+default\s*/, '')}` };
+    }
+    return { kind: 'invalid', reason: 'export default value is not a function' };
   }
-  if (/^module\.exports\s*=/.test(trimmed)) {
-    return `const module = { exports: undefined }; const exports = module.exports;\n${trimmed}\nreturn module.exports;`;
+  if (/^module\s*\.\s*exports\s*=/.test(trimmed)) {
+    return {
+      kind: 'callable',
+      source: `const module = { exports: undefined }; const exports = module.exports;\n${trimmed}\nreturn module.exports;`,
+    };
   }
-  return null;
+  // A bare arrow/function EXPRESSION (e.g. `async () => {...}`) as the whole
+  // recipe: parse as an expression statement; if the sole statement is a
+  // function expression, treat it as a callable (call it), not a discarded body.
+  try {
+    const asScript = acornParse(trimmed, { ecmaVersion: 'latest', sourceType: 'script' });
+    if (
+      asScript.body.length === 1 &&
+      (asScript.body[0] as any).type === 'ExpressionStatement' &&
+      isCallableNode((asScript.body[0] as any).expression)
+    ) {
+      return { kind: 'callable', source: `return (${trimmed})` };
+    }
+  } catch {
+    // not a standalone expression — fall through to body treatment.
+  }
+  return { kind: 'body' };
 }
 
 // Run a fetched recipe over an explicit `ctx`. NOT a security boundary — see
@@ -242,12 +295,15 @@ export function runRecipe(
   ];
 
   try {
-    // Bare recipes are treated as a function body. Export/module recipes are
-    // normalized into a callable, then called with (ctx.input, ctx). `'use strict'`
-    // and shadowed names shape the convenient case; they do not contain hostile code.
-    const source = callableSource(recipe.code);
-    if (source) {
-      const loader = new Function(...argNames, `'use strict';\n${source}`);
+    // Classify the code shape with the AST. Callable shapes (export/module/bare
+    // function expression) are normalized then CALLED with (ctx.input, ctx).
+    // Bare bodies run as a factory. Invalid shapes fail honestly, not silently.
+    const shape = classifyRecipe(recipe.code);
+    if (shape.kind === 'invalid') {
+      return { ok: false, error: `recipe code shape invalid: ${shape.reason}`, capabilities: recipe.capabilities };
+    }
+    if (shape.kind === 'callable') {
+      const loader = new Function(...argNames, `'use strict';\n${shape.source}`);
       const callable = loader(...argValues);
       if (typeof callable !== 'function') throw new Error('recipe export is not callable');
       const output = callable((ctx as { input?: unknown }).input, Object.freeze({ ...boundCtx }));
