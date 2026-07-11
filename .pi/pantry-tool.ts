@@ -39,6 +39,7 @@ import { fileURLToPath } from 'node:url';
 import { StringEnum } from '@earendil-works/pi-ai';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
+import { coerceObjectParams } from './coerce-params.ts';
 
 // Reuse the existing client + runner from the pantry repo. This extension lives
 // at <repo>/.pi/extensions/pantry/index.ts, so the repo root is three dirs up.
@@ -236,22 +237,7 @@ export default function pantryExtension(pi: ExtensionAPI) {
     ],
     parameters: PARAMS,
     async execute(_toolCallId, params) {
-      // Some tool-call transports deliver object-valued params (`input`, `recipe`)
-      // as JSON strings. Coerce them back so `ctx.input` and push validation see
-      // real objects instead of a string (which silently yields empty fields).
-      const p = params as Record<string, unknown>;
-      for (const key of ['input', 'recipe'] as const) {
-        if (typeof p[key] === 'string') {
-          const s = (p[key] as string).trim();
-          if (s.startsWith('{') || s.startsWith('[')) {
-            try {
-              p[key] = JSON.parse(s);
-            } catch {
-              // leave as-is; downstream validation reports a clear error.
-            }
-          }
-        }
-      }
+      coerceObjectParams(params as Record<string, unknown>);
       const { action } = params as PantryToolInput;
 
       if (action === 'list') {
