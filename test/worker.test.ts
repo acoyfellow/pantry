@@ -282,7 +282,10 @@ describe('routes round-trip', () => {
   test('invalid list scope fails closed instead of silently falling back to owner', async () => {
     const res = await app.fetch(req('/recipes?scope=recipient'), env);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'scope must be owner or shared', code: 'InvalidInput' });
+    expect(await res.json()).toEqual({
+      error: 'scope must be owner or shared',
+      code: 'InvalidInput',
+    });
   });
 
   test('GET missing => 404', async () => {
@@ -302,9 +305,15 @@ describe('routes round-trip', () => {
     await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), env);
     const otherEnv: Env = { ...env, PANTRY_OWNER: 'someone-else' };
     const list = await app.fetch(req('/recipes'), otherEnv);
-    expect((await list.json()) as { scope: string; recipes: unknown[] }).toEqual({ scope: 'owner', recipes: [] });
+    expect((await list.json()) as { scope: string; recipes: unknown[] }).toEqual({
+      scope: 'owner',
+      recipes: [],
+    });
     const sharedList = await app.fetch(req('/recipes?scope=shared'), otherEnv);
-    expect((await sharedList.json()) as { scope: string; recipes: unknown[] }).toEqual({ scope: 'shared', recipes: [] });
+    expect((await sharedList.json()) as { scope: string; recipes: unknown[] }).toEqual({
+      scope: 'shared',
+      recipes: [],
+    });
     const get = await app.fetch(req('/recipe/slugify'), otherEnv);
     expect(get.status).toBe(404);
   });
