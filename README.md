@@ -94,7 +94,14 @@ curl "$PANTRY_URL/health"
 
 ### Shared pantry (opt-in)
 
-Single-player remains the default. Shared pantry widens reads only, with no new core verbs:
+Single-player remains the default. The 0.0.1 shared-recipes core widens reads only, with no new core verbs:
+
+- private recipes remain owner-only;
+- shared discovery is metadata-only and includes author provenance, never `code` or credentials;
+- owner-wide sharing is implemented; recipient-specific invitations, revocation, audit history, and in-product publish/manage mutations are planned;
+- invalid list scopes fail with `400` rather than silently changing trust boundaries.
+
+Shared pantry widens reads only, with no new core verbs:
 
 ```sh
 pantry push recipe.json           # private

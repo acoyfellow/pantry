@@ -26,6 +26,14 @@ pantry run Name --input '{"x":1}'       # fetches then runs locally, not on pant
 
 `PantryClient` exposes `list({ scope: 'shared' })`, `listShared()`, and accepts optional `visibility` on `push`. Pi and OpenCode keep `list/get/run/push`; pass `scope: "shared"` for a shared list and `shared: true` or `recipe.visibility = "shared"` on push.
 
+## 0.0.1 product boundary
+
+The 0.0.1 shared-recipes experience is metadata-first. A recipient can see that a recipe is shared, who authored it, its status, version, capabilities, and schema, then make an explicit decision about any later source fetch. The Mote surface shows separate private and shared shelves, refresh/error states, and author provenance; it does not receive credentials, recipe source, or execute anything.
+
+Sharing is owner-wide opt-in in 0.0.1. Recipient-specific invitations, allowlists, revocation, acceptance workflows, audit history, and in-product publish/manage mutations are planned—not implemented. An invalid `scope` is rejected rather than silently treated as an owner query.
+
+For a safe local walkthrough, use [`examples/shared-recipes.fixture.json`](../examples/shared-recipes.fixture.json). Its credentials are deliberately fake and must never be copied into a deployed environment.
+
 ## Trust posture
 
 A shared recipe is code written by someone else. pantry returns the `author` owner so an agent or human can reason about provenance before running it. If you do not already trust the author and the code, run it in a real isolate such as a Worker Loader, separate Worker, child process, or vetted sandbox.

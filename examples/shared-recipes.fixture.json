@@ -1,0 +1,32 @@
+{
+  "fixtureOnly": true,
+  "note": "Local documentation fixture. These are fake owners and fake credentials; do not use them against a deployed service.",
+  "owners": [
+    {
+      "owner": "alice",
+      "credential": "fixture-alice-token",
+      "recipe": {
+        "name": "title_case",
+        "description": "Convert words to title case without I/O.",
+        "inputSchema": { "type": "object", "properties": { "text": { "type": "string" } } },
+        "code": "const text = String(ctx.input.text || ''); return { value: text.replace(/\\b\\w/g, (letter) => letter.toUpperCase()) };",
+        "capabilities": ["text.transform"],
+        "visibility": "shared",
+        "status": "enabled"
+      }
+    },
+    {
+      "owner": "bob",
+      "credential": "fixture-bob-token",
+      "recipe": {
+        "name": "private_note",
+        "description": "A private fixture recipe that must not cross owners.",
+        "inputSchema": { "type": "object", "properties": {} },
+        "code": "return { private: true };",
+        "capabilities": ["text.transform"],
+        "visibility": "private",
+        "status": "enabled"
+      }
+    }
+  ]
+}

@@ -148,8 +148,10 @@ describe('routes round-trip', () => {
     ).json()) as { recipes: Array<{ name: string }> };
     expect(byCap.recipes.map((r) => r.name)).toEqual(['deployWorker']);
     const all = (await (await app.fetch(req('/recipes'), env)).json()) as {
+      scope: string;
       recipes: Array<Record<string, unknown>>;
     };
+    expect(all.scope).toBe('owner');
     expect(all.recipes).toHaveLength(2);
     expect('code' in all.recipes[0]).toBe(false);
   });
@@ -217,7 +219,8 @@ describe('routes round-trip', () => {
     );
 
     const res = await app.fetch(req('/recipes?scope=shared'), makeEnvForDb(db, 'alice'));
-    const body = (await res.json()) as { recipes: Array<Record<string, unknown>> };
+    const body = (await res.json()) as { scope: string; recipes: Array<Record<string, unknown>> };
+    expect(body.scope).toBe('shared');
     expect(body.recipes.map((r) => r.name)).toEqual(['sharedOne']);
     expect(body.recipes[0].author).toBe('bob');
     expect(body.recipes[0].visibility).toBe('shared');
@@ -274,6 +277,12 @@ describe('routes round-trip', () => {
     expect(res.status).toBe(400);
   });
 
+  test('invalid list scope fails closed instead of silently falling back to owner', async () => {
+    const res = await app.fetch(req('/recipes?scope=recipient'), env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'scope must be owner or shared', code: 'InvalidInput' });
+  });
+
   test('GET missing => 404', async () => {
     const res = await app.fetch(req('/recipe/nope'), env);
     expect(res.status).toBe(404);
@@ -291,9 +300,9 @@ describe('routes round-trip', () => {
     await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), env);
     const otherEnv: Env = { ...env, PANTRY_OWNER: 'someone-else' };
     const list = await app.fetch(req('/recipes'), otherEnv);
-    expect((await list.json()) as { recipes: unknown[] }).toEqual({ recipes: [] });
+    expect((await list.json()) as { scope: string; recipes: unknown[] }).toEqual({ scope: 'owner', recipes: [] });
     const sharedList = await app.fetch(req('/recipes?scope=shared'), otherEnv);
-    expect((await sharedList.json()) as { recipes: unknown[] }).toEqual({ recipes: [] });
+    expect((await sharedList.json()) as { scope: string; recipes: unknown[] }).toEqual({ scope: 'shared', recipes: [] });
     const get = await app.fetch(req('/recipe/slugify'), otherEnv);
     expect(get.status).toBe(404);
   });
@@ -366,8 +375,10 @@ describe('F3: multi-owner trust (token -> owner) with cross-owner isolation', ()
     );
     // alice lists (owner scope) — must NOT include bob's private
     const aliceList = (await (await app.fetch(as(ALICE, '/recipes'), env)).json()) as {
+      scope: string;
       recipes: Array<{ name: string }>;
     };
+    expect(aliceList.scope).toBe('owner');
     expect(aliceList.recipes.map((r) => r.name)).not.toContain('bobsecret');
     // alice tries to GET bob's private by name — must 404 (not leak)
     const aliceGet = await app.fetch(as(ALICE, '/recipe/bobsecret'), env);

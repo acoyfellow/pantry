@@ -200,7 +200,11 @@ app.post('/recipes', async (c) => {
 // Filters keep discovery cost bounded by relevance, not cookbook size.
 app.get('/recipes', async (c) => {
   const owner = c.get('owner');
-  const scope = c.req.query('scope');
+  const requestedScope = c.req.query('scope');
+  if (requestedScope && requestedScope !== 'owner' && requestedScope !== 'shared') {
+    return handleError(new RecipeError('InvalidInput', 'scope must be owner or shared'));
+  }
+  const scope = requestedScope ?? 'owner';
   const q = c.req.query('q')?.trim().toLowerCase();
   const capability = c.req.query('capability')?.trim();
   const sql =
@@ -224,7 +228,7 @@ app.get('/recipes', async (c) => {
       }
     });
   }
-  return c.json({ recipes: filtered.map(listEntry) });
+  return c.json({ scope, recipes: filtered.map(listEntry) });
 });
 
 // GET /recipe/:name — full recipe INCLUDING code. The fetch a caller runs.
