@@ -1,0 +1,21 @@
+README.md
+  s_e050e2bde8a246::t_b61e4a2722026d 97-104
+docs/SHARED-PANTRY.md
+  s_e050e2bde8a246::t_62b480a814a5e7 29-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4050860f84a214b1d3e22ab0feaad80068792f40",
+  "prompts": {},
+  "sessions": {
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
