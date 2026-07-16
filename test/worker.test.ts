@@ -110,6 +110,8 @@ describe('routes round-trip', () => {
     const listBody = (await list.json()) as { recipes: Array<Record<string, unknown>> };
     expect(listBody.recipes).toHaveLength(1);
     expect('code' in listBody.recipes[0]).toBe(false);
+    expect(JSON.stringify(listBody)).not.toContain(sample.code);
+    expect(JSON.stringify(listBody)).not.toContain(TOKEN);
     expect(listBody.recipes[0].version).toBe(1);
 
     const get = await app.fetch(req('/recipe/slugify'), env);
