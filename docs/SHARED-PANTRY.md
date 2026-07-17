@@ -32,7 +32,7 @@ The 0.0.1 shared-recipes experience is metadata-first. A recipient can see that 
 
 Sharing is owner-wide opt-in in 0.0.1. Recipient-specific invitations, allowlists, revocation, acceptance workflows, audit history, and in-product publish/manage mutations are planned—not implemented. An invalid `scope` is rejected rather than silently treated as an owner query.
 
-For a safe local walkthrough, use [`examples/shared-recipes.fixture.json`](../examples/shared-recipes.fixture.json). Its credentials are deliberately fake and must never be copied into a deployed environment.
+For a safe local walkthrough, run `bun run demo:shared-flow`. It drives the real Worker routes over in-memory D1 twice, has Alice publish a shared fixture, has Bob discover/fetch/run it caller-side, and writes `.terraloop/shared-flow-receipt.json`. Its credentials are deliberately fake and it never contacts or mutates a deployed environment. The static fixture is also available at [`examples/shared-recipes.fixture.json`](../examples/shared-recipes.fixture.json).
 
 ## Trust posture
 

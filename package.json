@@ -14,6 +14,7 @@
     "dev": "wrangler dev",
     "build:site": "bun scripts/build-site.ts",
     "evals": "bun evals/run.ts",
+    "demo:shared-flow": "bun examples/shared-flow-demo.ts",
     "test": "bun test ./test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "bun run typecheck && bunx --bun @biomejs/biome check . && bun run test",
