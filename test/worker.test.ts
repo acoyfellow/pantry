@@ -229,6 +229,88 @@ describe('routes round-trip', () => {
     expect('code' in body.recipes[0]).toBe(false);
   });
 
+  test('tags, caller-reported usage, idempotency, and private share candidates are owner-safe', async () => {
+    const db = new FakeD1();
+    const alice = makeEnvForDb(db, 'alice');
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          name: 'reviewGate',
+          tags: ['mr/review', 'deploy/check'],
+        }),
+      }),
+      alice,
+    );
+    for (let i = 0; i < 5; i++) {
+      const usage = await app.fetch(
+        req('/recipe/reviewGate/usage', {
+          method: 'POST',
+          body: JSON.stringify({ eventId: `alice-run-${i}`, version: 1, outcome: 'success' }),
+        }),
+        alice,
+      );
+      expect(usage.status).toBe(200);
+    }
+    const duplicate = await app.fetch(
+      req('/recipe/reviewGate/usage', {
+        method: 'POST',
+        body: JSON.stringify({ eventId: 'alice-run-0', version: 1, outcome: 'success' }),
+      }),
+      alice,
+    );
+    expect(await duplicate.json()).toMatchObject({ recorded: false, runCount: 5 });
+    const list = (await (await app.fetch(req('/recipes?tag=mr/review'), alice)).json()) as {
+      recipes: Array<Record<string, unknown>>;
+    };
+    expect(list.recipes[0]).toMatchObject({
+      tags: ['deploy/check', 'mr/review'],
+      runCount: 5,
+      shareCandidate: true,
+    });
+    const bob = makeEnvForDb(db, 'bob');
+    const bobPrivate = await app.fetch(req('/recipes?scope=shared'), bob);
+    expect((await bobPrivate.json()) as { recipes: unknown[] }).toMatchObject({ recipes: [] });
+  });
+
+  test('shared usage is reportable by a recipient without exposing private candidates', async () => {
+    const db = new FakeD1();
+    const alice = makeEnvForDb(db, 'alice');
+    const bob = makeEnvForDb(db, 'bob');
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          name: 'sharedUsage',
+          visibility: 'shared',
+          tags: ['team/review'],
+        }),
+      }),
+      alice,
+    );
+    const usage = await app.fetch(
+      req('/recipe/sharedUsage/usage', {
+        method: 'POST',
+        body: JSON.stringify({ eventId: 'bob-run-1', version: 1, outcome: 'success' }),
+      }),
+      bob,
+    );
+    expect(await usage.json()).toMatchObject({ recorded: true, runCount: 1 });
+    const shared = (await (
+      await app.fetch(req('/recipes?scope=shared&tag=team/review'), bob)
+    ).json()) as {
+      recipes: Array<Record<string, unknown>>;
+    };
+    expect(shared.recipes[0]).toMatchObject({
+      runCount: 1,
+      shareCandidate: false,
+      tags: ['team/review'],
+    });
+    expect('code' in shared.recipes[0]).toBe(false);
+  });
+
   test('GET own recipe wins before shared recipe of same name', async () => {
     const db = new FakeD1();
     await app.fetch(

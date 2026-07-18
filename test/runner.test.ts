@@ -19,6 +19,18 @@ function asFull(code: string, capabilities = ['text.transform']): FullRecipe {
 }
 
 describe('bounded runner', () => {
+  test('ignores witness words inside comments and strings', () => {
+    expect(
+      scanRecipeCode('// eval and require are documented here\nreturn "Function";'),
+    ).toBeNull();
+    expect(scanRecipeCode('/* import.meta is only a note */ return "constructor";')).toBeNull();
+  });
+
+  test('still detects executable witness tokens', () => {
+    expect(scanRecipeCode('return eval(input);')).toBe('eval');
+    expect(scanRecipeCode('return import.meta.url;')).toBe('import.meta');
+  });
+
   test('runs the sample slugify recipe over a restricted ctx', () => {
     const recipe = asFull(sampleRecipe.code, sampleRecipe.capabilities);
     const result = runRecipe(recipe, { input: { text: 'Hello, Pantry World!' } });

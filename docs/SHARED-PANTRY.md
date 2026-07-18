@@ -6,8 +6,10 @@ pantry is single-player first. A bearer token maps to one `owner`, and normal re
 
 - Schema: `recipes.visibility` is `private` by default and can be `shared`. Existing rows remain private. The `(owner, name)` uniqueness rule is unchanged.
 - Writes stay owner-scoped. `POST /recipes` upserts only the caller's `(owner, name)`. Publishing means pushing your own recipe with `"visibility":"shared"` or using `push --shared`. Another owner cannot flip your row.
-- `GET /recipes` still lists your recipes, private and shared, without code.
+- `GET /recipes` still lists your recipes, private and shared, without code; it includes tags and caller-reported usage metadata.
 - `GET /recipes?scope=shared` lists shared recipes across all owners, without code, and includes `author` as provenance. Private rows are never included.
+- `GET /recipes?tag=mr/review` filters discovery by an exact normalized namespace.
+- `POST /recipe/:name/usage` records an idempotent caller-reported successful use. Pantry never executes the recipe and never treats a fetch as a run.
 - `GET /recipe/:name` resolves your own recipe first. If you do not have that name, pantry returns the most recently updated shared recipe with that name. The full response includes `author`, `visibility`, and `code`.
 - The server still never executes recipe code. Shared widens read access only. Capabilities remain tags for the caller to reason about, not grants.
 
@@ -28,7 +30,7 @@ pantry run Name --input '{"x":1}'       # fetches then runs locally, not on pant
 
 ## 0.0.1 product boundary
 
-The 0.0.1 shared-recipes experience is metadata-first. A recipient can see that a recipe is shared, who authored it, its status, version, capabilities, and schema, then make an explicit decision about any later source fetch. The Mote surface shows separate private and shared shelves, refresh/error states, and author provenance; it does not receive credentials, recipe source, or execute anything.
+The 0.0.1 shared-recipes experience is metadata-first. A recipient can see that a recipe is shared, who authored it, its status, version, capabilities, tags, schema, and caller-reported usage, then make an explicit decision about any later source fetch. The Mote surface shows separate private and shared shelves, refresh/error states, and author provenance; it does not receive credentials, recipe source, or execute anything. Owner views can show a high-use private recipe as a share candidate; this signal never crosses the private boundary.
 
 Sharing is owner-wide opt-in in 0.0.1. Recipient-specific invitations, allowlists, revocation, acceptance workflows, audit history, and in-product publish/manage mutations are planned—not implemented. An invalid `scope` is rejected rather than silently treated as an owner query.
 

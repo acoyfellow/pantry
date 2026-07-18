@@ -48,13 +48,14 @@ export class PantryClient {
   // Fail-soft: an unconfigured client lists nothing rather than erroring, so a
   // recipe lookup degrades to "re-reason it" instead of crashing the caller.
   async list(
-    options: { scope?: 'owner' | 'shared'; q?: string; capability?: string } = {},
+    options: { scope?: 'owner' | 'shared'; q?: string; capability?: string; tag?: string } = {},
   ): Promise<RecipeListEntry[]> {
     if (!this.configured) return [];
     const params = new URLSearchParams();
     if (options.scope === 'shared') params.set('scope', 'shared');
     if (options.q) params.set('q', options.q);
     if (options.capability) params.set('capability', options.capability);
+    if (options.tag) params.set('tag', options.tag);
     const suffix = params.toString() ? `?${params}` : '';
     const res = await this.fetchImpl(`${this.url}/recipes${suffix}`, { headers: this.headers() });
     if (!res.ok) throw new Error(`pantry list failed: ${res.status}`);
@@ -62,8 +63,30 @@ export class PantryClient {
     return body.recipes ?? [];
   }
 
-  async listShared(): Promise<RecipeListEntry[]> {
-    return this.list({ scope: 'shared' });
+  async listShared(
+    options: { q?: string; capability?: string; tag?: string } = {},
+  ): Promise<RecipeListEntry[]> {
+    return this.list({ ...options, scope: 'shared' });
+  }
+
+  // Report a successful caller-side use. Pantry never executes the recipe.
+  async reportUsage(
+    name: string,
+    version: number,
+    eventId: string,
+  ): Promise<{
+    recorded: boolean;
+    runCount: number;
+    lastRunAt: string | null;
+  }> {
+    this.require();
+    const res = await this.fetchImpl(`${this.url}/recipe/${encodeURIComponent(name)}/usage`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ eventId, version, outcome: 'success' }),
+    });
+    if (!res.ok) throw new Error(`pantry usage report failed: ${res.status}`);
+    return (await res.json()) as { recorded: boolean; runCount: number; lastRunAt: string | null };
   }
 
   // Returns the full recipe including code + capabilities + inputSchema.

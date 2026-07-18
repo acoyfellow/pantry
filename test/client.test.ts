@@ -36,6 +36,30 @@ describe('PantryClient', () => {
     expect((calls[0].init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
   });
 
+  test('list supports exact tag filtering without changing auth behavior', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ recipes: [] }));
+    const client = new PantryClient({ ...config, fetch: fn });
+    await client.list({ tag: 'mr/review' });
+    expect(calls[0].url).toBe('https://pantry.test/recipes?tag=mr%2Freview');
+    expect((calls[0].init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
+  });
+
+  test('reportUsage posts a caller-side success event and returns telemetry', async () => {
+    const { fn, calls } = fakeFetch(() =>
+      Response.json({ recorded: true, runCount: 5, lastRunAt: '2026-07-17T00:00:00.000Z' }),
+    );
+    const client = new PantryClient({ ...config, fetch: fn });
+    const result = await client.reportUsage('slugify', 3, 'event-3');
+    expect(result.runCount).toBe(5);
+    expect(calls[0].url).toBe('https://pantry.test/recipe/slugify/usage');
+    expect(calls[0].init?.method).toBe('POST');
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+      eventId: 'event-3',
+      version: 3,
+      outcome: 'success',
+    });
+  });
+
   test('get returns the full recipe including code; 404 => null', async () => {
     const { fn } = fakeFetch((url) =>
       url.endsWith('/recipe/slugify')

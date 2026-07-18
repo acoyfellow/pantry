@@ -8,6 +8,7 @@ type Row = RecipeRow;
 
 export class FakeD1 {
   rows: Row[] = [];
+  usageReports = new Set<string>();
 
   prepare(sql: string) {
     return new FakeStatement(this, sql.replace(/\s+/g, ' ').trim());
@@ -84,6 +85,9 @@ class FakeStatement {
         version,
         source_run_id,
         visibility,
+        tags_json,
+        run_count,
+        last_run_at,
         created_at,
         updated_at,
       ] = this.args as [
@@ -98,6 +102,9 @@ class FakeStatement {
         number,
         string | null,
         RecipeRow['visibility'],
+        string,
+        number,
+        string | null,
         string,
         string,
       ];
@@ -114,11 +121,28 @@ class FakeStatement {
         version,
         source_run_id,
         visibility,
+        tags_json,
+        run_count: existing?.run_count ?? run_count,
+        last_run_at: existing?.last_run_at ?? last_run_at,
         created_at,
         updated_at,
       };
       if (existing) Object.assign(existing, next);
       else this.db.rows.push(next);
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT OR IGNORE INTO recipe_usage_reports')) {
+      const [id] = this.args as [string];
+      if (this.db.usageReports.has(id)) return { meta: { changes: 0 } };
+      this.db.usageReports.add(id);
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('UPDATE recipes SET run_count = run_count + 1')) {
+      const [, owner, name] = this.args as [string, string, string];
+      const row = this.db.rows.find((r) => r.owner === owner && r.name === name);
+      if (!row) return { meta: { changes: 0 } };
+      row.run_count = (row.run_count ?? 0) + 1;
+      row.last_run_at = this.args[0] as string;
       return { meta: { changes: 1 } };
     }
     if (this.sql.startsWith('DELETE FROM recipes WHERE owner = ? AND name = ?')) {

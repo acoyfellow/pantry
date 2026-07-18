@@ -22,6 +22,9 @@ export type RecipeRow = {
   version: number;
   source_run_id: string | null;
   visibility?: RecipeVisibility;
+  tags_json?: string;
+  run_count?: number;
+  last_run_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -41,6 +44,7 @@ export type RecipeInput = {
   sourceRunId: string | null;
   status: RecipeStatus;
   visibility?: RecipeVisibility;
+  tags?: string[];
 };
 
 export class RecipeError extends Error {
@@ -58,6 +62,8 @@ export class RecipeError extends Error {
 // one so the caller can decide whether the script is safe to run.
 const SCOPED_CAPABILITY = /^(workspace|machine|cloudbox)\.[a-zA-Z0-9_.-]+$/;
 const GENERIC_CAPABILITY = /^[a-z][a-z0-9]*(\.[a-z0-9_-]+)+$/;
+const RECIPE_TAG = /^[a-z][a-z0-9_-]{0,31}\/[a-z0-9][a-z0-9_.-]{0,63}$/;
+const MAX_RECIPE_TAGS = 20;
 
 const MAX_CODE_BYTES = 32_000;
 
@@ -91,6 +97,17 @@ function cleanCapabilities(value: unknown): string[] {
     throw new RecipeError('InvalidInput', `invalid capabilities: ${invalid.join(', ')}`);
   }
   return [...new Set(cleaned)].sort();
+}
+
+function cleanTags(value: unknown): string[] {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > MAX_RECIPE_TAGS) {
+    throw new RecipeError('InvalidInput', `tags must contain at most ${MAX_RECIPE_TAGS} items`);
+  }
+  const tags = value.map((tag) => (typeof tag === 'string' ? tag.trim().toLowerCase() : ''));
+  const invalid = tags.filter((tag) => !RECIPE_TAG.test(tag));
+  if (invalid.length) throw new RecipeError('InvalidInput', `invalid tags: ${invalid.join(', ')}`);
+  return [...new Set(tags)].sort();
 }
 
 function cleanDescription(value: unknown): string {
@@ -158,6 +175,7 @@ export function validateRecipeInput(input: unknown): RecipeInput {
   const inputSchema = cleanInputSchema(body.inputSchema);
   const code = cleanCode(body.code);
   const capabilities = cleanCapabilities(body.capabilities);
+  const tags = cleanTags(body.tags);
   const status: RecipeStatus =
     body.status === 'pending' ? 'pending' : body.status === 'disabled' ? 'disabled' : 'enabled';
   const visibility: RecipeVisibility = body.visibility === 'shared' ? 'shared' : 'private';
@@ -165,7 +183,17 @@ export function validateRecipeInput(input: unknown): RecipeInput {
     typeof body.sourceRunId === 'string' && body.sourceRunId.trim()
       ? body.sourceRunId.trim()
       : null;
-  return { name, description, inputSchema, code, capabilities, status, sourceRunId, visibility };
+  return {
+    name,
+    description,
+    inputSchema,
+    code,
+    capabilities,
+    status,
+    sourceRunId,
+    visibility,
+    tags,
+  };
 }
 
 // The cheap discovery shape: everything a caller needs to choose a recipe,
@@ -181,6 +209,10 @@ export function listEntry(row: RecipeRow) {
     sourceRunId: row.source_run_id,
     visibility: row.visibility ?? 'private',
     author: row.owner,
+    tags: JSON.parse(row.tags_json || '[]') as string[],
+    runCount: row.run_count ?? 0,
+    lastRunAt: row.last_run_at ?? null,
+    shareCandidate: (row.visibility ?? 'private') === 'private' && (row.run_count ?? 0) >= 5,
     updatedAt: row.updated_at,
   };
 }
@@ -195,7 +227,24 @@ export function fullRecipe(row: RecipeRow) {
   };
 }
 
-export type RecipeListEntry = Partial<ReturnType<typeof listEntry>> &
-  Omit<ReturnType<typeof listEntry>, 'visibility' | 'author'>;
-export type FullRecipe = Partial<ReturnType<typeof fullRecipe>> &
-  Omit<ReturnType<typeof fullRecipe>, 'visibility' | 'author'>;
+type RecipeMetadata = ReturnType<typeof listEntry>;
+export type RecipeListEntry = Omit<
+  RecipeMetadata,
+  'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+> &
+  Partial<
+    Pick<
+      RecipeMetadata,
+      'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+    >
+  >;
+export type FullRecipe = Omit<
+  ReturnType<typeof fullRecipe>,
+  'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+> &
+  Partial<
+    Pick<
+      ReturnType<typeof fullRecipe>,
+      'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+    >
+  >;

@@ -147,14 +147,63 @@ const SHADOWED_PARAMS = [
 const FORBIDDEN_TOKENS = ['import', 'Function', 'constructor', 'eval', 'require'];
 
 // A BEST-EFFORT, NOT-AIRTIGHT scan for the obvious escape vectors. Returns the
-// first offending token, or null if none are found. A null result does NOT mean
-// the code is safe: this is a coarse word scan that string-built names and
-// other reflection tricks slip past. It exists only to fail loudly on the
-// textbook escapes, never as a substitute for a real isolate.
+// first offending token, or null if none are found. Comments and quoted values
+// are ignored so documentation such as "eval is not used" is not blocked. A
+// null result does NOT mean the code is safe: string-built names, templates,
+// and reflection tricks can still slip past it. It exists only to fail loudly
+// on textbook escapes, never as a substitute for a real isolate.
+function executableText(code: string): string {
+  let out = '';
+  let quote: "'" | '"' | '`' | null = null;
+  let escaped = false;
+  for (let i = 0; i < code.length; i++) {
+    const char = code[i];
+    const next = code[i + 1];
+    if (!quote && char === '/' && next === '/') {
+      out += '  ';
+      i += 1;
+      while (i + 1 < code.length && code[i + 1] !== '\\n') {
+        out += ' ';
+        i += 1;
+      }
+      continue;
+    }
+    if (!quote && char === '/' && next === '*') {
+      out += '  ';
+      i += 1;
+      while (i + 1 < code.length && !(code[i + 1] === '*' && code[i + 2] === '/')) {
+        out += code[i + 1] === '\\n' ? '\\n' : ' ';
+        i += 1;
+      }
+      if (i + 2 < code.length) {
+        out += '  ';
+        i += 2;
+      }
+      continue;
+    }
+    if (quote) {
+      out += char === '\\n' ? '\\n' : ' ';
+      if (escaped) escaped = false;
+      else if (char === '\\\\') escaped = true;
+      else if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      escaped = false;
+      out += ' ';
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
 export function scanRecipeCode(code: string): string | null {
-  if (/\bimport\s*\.\s*meta\b/.test(code)) return 'import.meta';
+  const executable = executableText(code);
+  if (/\bimport\s*\.\s*meta\b/.test(executable)) return 'import.meta';
   for (const token of FORBIDDEN_TOKENS) {
-    if (new RegExp(`\\b${token}\\b`).test(code)) return token;
+    if (new RegExp(`\\b${token}\\b`).test(executable)) return token;
   }
   return null;
 }

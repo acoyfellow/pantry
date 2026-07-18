@@ -155,8 +155,8 @@ app.post('/recipes', async (c) => {
     const id = crypto.randomUUID();
 
     await c.env.DB.prepare(
-      `INSERT INTO recipes (id, owner, name, description, input_schema_json, code, capabilities_json, status, version, source_run_id, visibility, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO recipes (id, owner, name, description, input_schema_json, code, capabilities_json, status, version, source_run_id, visibility, tags_json, run_count, last_run_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(owner, name) DO UPDATE SET
          description = excluded.description,
          input_schema_json = excluded.input_schema_json,
@@ -166,6 +166,7 @@ app.post('/recipes', async (c) => {
          version = excluded.version,
          source_run_id = excluded.source_run_id,
          visibility = excluded.visibility,
+         tags_json = excluded.tags_json,
          updated_at = excluded.updated_at`,
     )
       .bind(
@@ -180,6 +181,9 @@ app.post('/recipes', async (c) => {
         version,
         parsed.sourceRunId,
         parsed.visibility,
+        JSON.stringify(parsed.tags ?? []),
+        0,
+        null,
         createdAt,
         now,
       )
@@ -196,7 +200,8 @@ app.post('/recipes', async (c) => {
 
 // GET /recipes — list WITHOUT code. Cheap discovery.
 // Default scope is owner-only. ?scope=shared lists opt-in shared recipes from all owners.
-// ?q= filters by keyword over name+description; ?capability= filters by a capability tag.
+// ?q= filters by keyword over name+description; ?capability= filters by a capability tag;
+// ?tag= filters an exact discovery namespace such as mr/review.
 // Filters keep discovery cost bounded by relevance, not cookbook size.
 app.get('/recipes', async (c) => {
   const owner = c.get('owner');
@@ -207,6 +212,9 @@ app.get('/recipes', async (c) => {
   const scope = requestedScope ?? 'owner';
   const q = c.req.query('q')?.trim().toLowerCase();
   const capability = c.req.query('capability')?.trim();
+  const tag = c.req.query('tag')?.trim().toLowerCase();
+  if (tag && tag.length > 96)
+    return handleError(new RecipeError('InvalidInput', 'tag filter is too long'));
   const sql =
     scope === 'shared'
       ? "SELECT * FROM recipes WHERE visibility = 'shared' ORDER BY updated_at DESC"
@@ -228,7 +236,73 @@ app.get('/recipes', async (c) => {
       }
     });
   }
+  if (tag) {
+    filtered = filtered.filter((r) => {
+      try {
+        return (JSON.parse(r.tags_json ?? '[]') as string[]).includes(tag);
+      } catch {
+        return false;
+      }
+    });
+  }
   return c.json({ scope, recipes: filtered.map(listEntry) });
+});
+
+// POST /recipe/:name/usage — caller-reported successful use, never execution by Pantry.
+// A private recipe is reportable only by its owner; a shared recipe is reportable by
+// any authenticated recipient. eventId makes retries idempotent. Reports carry no code.
+app.post('/recipe/:name/usage', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    const eventId = typeof body?.eventId === 'string' ? body.eventId.trim() : '';
+    const version = body?.version;
+    if (!eventId || eventId.length > 128 || !Number.isInteger(version) || Number(version) < 1) {
+      return handleError(
+        new RecipeError('InvalidInput', 'eventId and positive integer version are required'),
+      );
+    }
+    if (body?.outcome !== 'success') {
+      return handleError(new RecipeError('InvalidInput', 'usage outcome must be success'));
+    }
+    const owner = c.get('owner');
+    const recipe = await c.env.DB.prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
+      .bind(owner, c.req.param('name'))
+      .first<RecipeRow>();
+    const shared = recipe
+      ? null
+      : await c.env.DB.prepare(
+          "SELECT * FROM recipes WHERE visibility = 'shared' AND name = ? ORDER BY updated_at DESC LIMIT 1",
+        )
+          .bind(c.req.param('name'))
+          .first<RecipeRow>();
+    const target = recipe ?? shared;
+    if (!target || target.version !== Number(version)) {
+      return handleError(new RecipeError('NotFound', 'recipe not found'));
+    }
+    const reportedAt = new Date().toISOString();
+    const inserted = await c.env.DB.prepare(
+      'INSERT OR IGNORE INTO recipe_usage_reports (id, owner, recipe_name, reporter, version, reported_at) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+      .bind(eventId, target.owner, target.name, owner, target.version, reportedAt)
+      .run();
+    if ((inserted.meta?.changes ?? 0) > 0) {
+      await c.env.DB.prepare(
+        'UPDATE recipes SET run_count = run_count + 1, last_run_at = ? WHERE owner = ? AND name = ?',
+      )
+        .bind(reportedAt, target.owner, target.name)
+        .run();
+    }
+    const updated = await c.env.DB.prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
+      .bind(target.owner, target.name)
+      .first<RecipeRow>();
+    return c.json({
+      recorded: (inserted.meta?.changes ?? 0) > 0,
+      runCount: updated?.run_count ?? target.run_count ?? 0,
+      lastRunAt: updated?.last_run_at ?? target.last_run_at ?? null,
+    });
+  } catch (error) {
+    return handleError(error);
+  }
 });
 
 // GET /recipe/:name — full recipe INCLUDING code. The fetch a caller runs.

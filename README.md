@@ -60,6 +60,7 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `status` is `"pending"`, `"enabled"`, or `"disabled"`. Unknown values become `"enabled"`; the Pi push path can save pending recipes for owner approval before enabling.
 - `sourceRunId` is an optional string, otherwise `null`.
 - `visibility` is `"private"` by default. Set `"shared"` to opt your own recipe into the shared read pool.
+- `tags` is an optional list of bounded discovery namespaces such as `mr/review` or `deploy/worker`; tags are normalized, deduplicated, and sorted.
 
 The `code` field returns a plain value. The demo runner accepts the shapes an agent naturally authors: a bare function body that reads `ctx`, an `export default (input, ctx) => ...` (or `export default function run(input, ctx)`), or a `module.exports = (input, ctx) => ...`. The sample in `examples/sample-recipe.ts` uses the bare-body shape, reads `ctx.input.text`, and returns `{ slug }`.
 
@@ -138,7 +139,9 @@ A valid push runs a best-effort lint and returns any `warnings` alongside `name`
 
 ### `GET /recipes`
 
-List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the discovery call and the review-before-run entry point. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`.
+List recipes for the owner, ordered by `updatedAt` descending. The list never includes `code`. This is the discovery call and the review-before-run entry point. Add `?scope=shared` to list shared recipes from all owners with `author` provenance, still without `code`. Use `?tag=mr/review` for exact namespace filtering.
+
+Metadata includes caller-reported `runCount` and `lastRunAt`. These are usage reports, not Pantry execution evidence. Owner-scoped private entries also expose `shareCandidate` after five successful reports; this is an owner-only nudge and never reveals a private recipe to another owner.
 
 Filter discovery so its cost stays bounded by relevance as the cookbook grows: `?q=` matches a keyword over name and description, and `?capability=` matches a capability tag. Filters compose with `?scope=`, and the list still never includes `code`.
 
@@ -148,6 +151,19 @@ curl "$PANTRY_URL/recipes" -H "authorization: Bearer $PANTRY_TOKEN"
 #   "capabilities":["text.transform"],"status":"enabled","version":1,
 #   "sourceRunId":null,"updatedAt":"..."}]}
 ```
+
+### `POST /recipe/:name/usage`
+
+Record a successful caller-side use without sending source or asking Pantry to execute anything. The caller supplies an idempotent `eventId` and the fetched `version`; private recipes accept reports only from their owner, while shared recipes accept authenticated recipient reports.
+
+```sh
+curl -X POST "$PANTRY_URL/recipe/slugify/usage" \
+  -H "authorization: Bearer $PANTRY_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"eventId":"local-run-001","version":1,"outcome":"success"}'
+```
+
+The response reports whether the event was newly recorded, plus `runCount` and `lastRunAt`. Reports are caller assertions and can be abused by an authenticated reporter; they are signals for discovery/pruning, not proof that Pantry ran code.
 
 ### `GET /recipe/:name`
 
