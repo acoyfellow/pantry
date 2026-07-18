@@ -1,0 +1,51 @@
+README.md
+  s_e050e2bde8a246::t_03e1cbca558b38 63,142-144,155-167
+docs/SHARED-PANTRY.md
+  s_e050e2bde8a246::t_ca679179953c36 9,11-12,33
+migrations/0003_usage_and_tags.sql
+  s_8d6441ab9a574f::t_03f81a8601db68 1-16
+src/client.ts
+  s_b08e9baae4ab1a::t_1fc8efd625f29f 51,58,66-89
+src/recipe.ts
+  s_b08e9baae4ab1a::t_dd95306315fc33 25-27,47,65-66,102-112,178,186-196,212-215,230-250
+src/worker.ts
+  s_b08e9baae4ab1a::t_6a0d4856e3443b 158-159,169,184-186,203-204,215-217,239-247,251-307
+test/client.test.ts
+  s_e050e2bde8a246::t_57fc80c2e3c774 39-62
+test/runner.test.ts
+  s_b08e9baae4ab1a::t_907493886064ba 22-33
+test/worker.test.ts
+  s_b08e9baae4ab1a::t_dd1b41e5e6c640 232-313
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "98a639ac1324d8cbde542cf0a5d3dcb0c3fdbebf",
+  "prompts": {},
+  "sessions": {
+    "s_8d6441ab9a574f": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019edfca-3671-72bb-aedb-1bbb477db17b",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_b08e9baae4ab1a": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019f65ec-d524-76e8-9a59-c65e21107c73",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    },
+    "s_e050e2bde8a246": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e9296-4ed4-786c-96d1-b8237d516f79",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Jordan Coeyman <jcoeyman@cloudflare.com>"
+    }
+  }
+}
