@@ -1,0 +1,4 @@
+PANTRY_DEV_ACCESS_IDENTITY=dev@localhost
+PANTRY_ACCESS_PRINCIPALS={"dev@localhost":"agent-experience"}
+PANTRY_ACCESS_TEAMS={"agent-experience":"agent-experience"}
+PANTRY_ACCESS_ONLY=true

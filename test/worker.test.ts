@@ -88,7 +88,453 @@ describe('auth gate (fail-closed)', () => {
   test('health is open and needs no token', async () => {
     const res = await app.fetch(req('/health', {}, false), makeEnv());
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, service: 'pantry' });
+    const health = (await res.json()) as { ok: boolean; service: string };
+    expect(health).toEqual({ ok: true, service: 'pantry' });
+  });
+
+  test('missing Access identity is unauthorized when Access is the configured boundary', async () => {
+    const env: Env = {
+      DB: new FakeD1() as unknown as D1Database,
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'operator' }),
+    };
+    const res = await app.fetch(req('/api/session', {}, false), env);
+    expect(res.status).toBe(401);
+  });
+
+  test('Access-only deployment rejects bearer credentials', async () => {
+    const env: Env = {
+      DB: new FakeD1() as unknown as D1Database,
+      PANTRY_TOKEN: TOKEN,
+      PANTRY_ACCESS_ONLY: 'true',
+    };
+    const res = await app.fetch(req('/recipes'), env);
+    expect(res.status).toBe(401);
+  });
+
+  test('unknown Access identity is rejected', async () => {
+    const env: Env = {
+      DB: new FakeD1() as unknown as D1Database,
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'operator' }),
+    };
+    const res = await app.fetch(
+      new Request('https://pantry.test/api/session', {
+        headers: {
+          origin: 'https://pantry.test',
+          'cf-access-authenticated-user-email': 'intruder@example.com',
+        },
+      }),
+      env,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test('authorized Access team member receives a stable session principal and is same-origin only', async () => {
+    const db = new FakeD1();
+    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
+    const env: Env = {
+      DB: db as unknown as D1Database,
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'workspace-owner' }),
+      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+    };
+    const request = new Request('https://pantry.test/api/session', {
+      headers: {
+        origin: 'https://pantry.test',
+        'cf-access-authenticated-user-email': 'operator@example.com',
+      },
+    });
+    const session = await app.fetch(request, env);
+    expect(session.status).toBe(200);
+    const sessionBody = (await session.json()) as {
+      principal: string;
+      team: string;
+      role: string;
+    };
+    expect(sessionBody).toEqual({
+      principal: 'workspace-owner',
+      team: 'workspace',
+      role: 'owner',
+    });
+    const crossOrigin = await app.fetch(
+      new Request('https://pantry.test/api/session', {
+        headers: {
+          origin: 'https://other.test',
+          'cf-access-authenticated-user-email': 'operator@example.com',
+        },
+      }),
+      env,
+    );
+    expect(crossOrigin.status).toBe(403);
+  });
+
+  test('Access principals require a configured database team membership', async () => {
+    const env: Env = {
+      DB: new FakeD1() as unknown as D1Database,
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'workspace-owner' }),
+      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+    };
+    const session = await app.fetch(
+      new Request('https://pantry.test/api/session', {
+        headers: {
+          origin: 'https://pantry.test',
+          'cf-access-authenticated-user-email': 'operator@example.com',
+        },
+      }),
+      env,
+    );
+    expect(session.status).toBe(403);
+  });
+
+  test('agent credentials are hashed, scoped, and blocked from management routes', async () => {
+    const db = new FakeD1();
+    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
+    const env: Env = {
+      DB: db as unknown as D1Database,
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'owner@example.com': 'workspace-owner' }),
+      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+    };
+    const accessHeaders = {
+      origin: 'https://pantry.test',
+      'cf-access-authenticated-user-email': 'owner@example.com',
+      'content-type': 'application/json',
+    };
+    const created = await app.fetch(
+      new Request('https://pantry.test/api/agent-credentials', {
+        method: 'POST',
+        headers: accessHeaders,
+        body: JSON.stringify({ principal: 'build-agent', scopes: ['recipes:read'] }),
+      }),
+      env,
+    );
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { id: string; credential: string };
+    expect(db.agentCredentials).toHaveLength(1);
+    expect(db.agentCredentials[0]?.credential_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(db.agentCredentials[0]?.credential_hash).not.toBe(body.credential);
+    const agentHeaders = {
+      authorization: `Bearer ${body.credential}`,
+      origin: 'https://agent.test',
+    };
+    expect(
+      (await app.fetch(new Request('https://pantry.test/recipes', { headers: agentHeaders }), env))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await app.fetch(
+          new Request('https://pantry.test/api/session', { headers: agentHeaders }),
+          env,
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.fetch(
+          new Request('https://pantry.test/recipe/slugify/approval', {
+            method: 'POST',
+            headers: agentHeaders,
+          }),
+          env,
+        )
+      ).status,
+    ).toBe(403);
+    const rotated = await app.fetch(
+      new Request(`https://pantry.test/api/agent-credentials/${body.id}/rotate`, {
+        method: 'POST',
+        headers: accessHeaders,
+      }),
+      env,
+    );
+    expect(rotated.status).toBe(200);
+    const replacement = (await rotated.json()) as { id: string; credential: string };
+    expect(
+      (await app.fetch(new Request('https://pantry.test/recipes', { headers: agentHeaders }), env))
+        .status,
+    ).toBe(401);
+    const replacementHeaders = {
+      authorization: `Bearer ${replacement.credential}`,
+      origin: 'https://agent.test',
+    };
+    expect(
+      (
+        await app.fetch(
+          new Request('https://pantry.test/recipes', { headers: replacementHeaders }),
+          env,
+        )
+      ).status,
+    ).toBe(200);
+    const revoked = await app.fetch(
+      new Request(`https://pantry.test/api/agent-credentials/${replacement.id}`, {
+        method: 'DELETE',
+        headers: {
+          origin: 'https://pantry.test',
+          'cf-access-authenticated-user-email': 'owner@example.com',
+        },
+      }),
+      env,
+    );
+    expect(revoked.status).toBe(200);
+    expect(
+      (
+        await app.fetch(
+          new Request('https://pantry.test/recipes', { headers: replacementHeaders }),
+          env,
+        )
+      ).status,
+    ).toBe(401);
+  });
+
+  test('legacy bearer tokens cannot approve recipes', async () => {
+    const response = await app.fetch(
+      req('/recipe/slugify/approval', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'approve' }),
+      }),
+      makeEnv(),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  test('team members may review approvals but only approvers and owners may decide', async () => {
+    const db = new FakeD1();
+    db.teamMembers.push(
+      { team_id: 'workspace', principal: 'reviewer', role: 'member' },
+      { team_id: 'workspace', principal: 'approver', role: 'approver' },
+    );
+    const env: Env = {
+      ...makeEnvForDb(db, 'workspace-owner'),
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({
+        'reviewer@example.com': 'reviewer',
+        'approver@example.com': 'approver',
+      }),
+      PANTRY_ACCESS_TEAMS: JSON.stringify({ reviewer: 'workspace', approver: 'workspace' }),
+    };
+    await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), {
+      ...env,
+      PANTRY_OWNER: 'approver',
+    });
+    const reviewerHeaders = {
+      origin: 'https://pantry.test',
+      'cf-access-authenticated-user-email': 'reviewer@example.com',
+    };
+    const queue = await app.fetch(
+      new Request('https://pantry.test/api/approvals', { headers: reviewerHeaders }),
+      env,
+    );
+    expect(queue.status).toBe(200);
+    const denied = await app.fetch(
+      new Request('https://pantry.test/recipe/slugify/approval', {
+        method: 'POST',
+        headers: { ...reviewerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          version: db.rows[0]?.version,
+          recipeDigest: db.rows[0]?.recipe_digest,
+        }),
+      }),
+      env,
+    );
+    expect(denied.status).toBe(403);
+    const approved = await app.fetch(
+      new Request('https://pantry.test/recipe/slugify/approval', {
+        method: 'POST',
+        headers: {
+          origin: 'https://pantry.test',
+          'cf-access-authenticated-user-email': 'approver@example.com',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'approve',
+          version: db.rows[0]?.version,
+          recipeDigest: db.rows[0]?.recipe_digest,
+        }),
+      }),
+      env,
+    );
+    expect(approved.status).toBe(200);
+    expect(db.approvalReceipts[0]?.actor).toBe('approver@example.com');
+  });
+});
+
+describe('collaborative approval hardening', () => {
+  function makeApprovalEnv(db: FakeD1): Env {
+    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
+    return {
+      ...makeEnvForDb(db, 'workspace-owner'),
+      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'owner@example.com': 'workspace-owner' }),
+      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+    };
+  }
+
+  function approvalRequest(name: string, body: Record<string, unknown>): Request {
+    return new Request(`https://pantry.test/recipe/${encodeURIComponent(name)}/approval`, {
+      method: 'POST',
+      headers: {
+        origin: 'https://pantry.test',
+        'cf-access-authenticated-user-email': 'owner@example.com',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  test('rejects approval requests with a stale version or digest before creating a receipt', async () => {
+    const db = new FakeD1();
+    const env = makeApprovalEnv(db);
+    const first = await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      env,
+    );
+    const firstSubject = (await first.json()) as { version: number; recipeDigest: string };
+    const second = await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, code: 'return { slug: ctx.input.text.toLowerCase() };' }),
+      }),
+      env,
+    );
+    const secondSubject = (await second.json()) as { version: number; recipeDigest: string };
+
+    const staleVersion = await app.fetch(
+      approvalRequest('slugify', {
+        action: 'approve',
+        version: firstSubject.version,
+        recipeDigest: firstSubject.recipeDigest,
+      }),
+      env,
+    );
+    const staleDigest = await app.fetch(
+      approvalRequest('slugify', {
+        action: 'approve',
+        version: secondSubject.version,
+        recipeDigest: firstSubject.recipeDigest,
+      }),
+      env,
+    );
+
+    expect(staleVersion.status).toBe(409);
+    expect(staleDigest.status).toBe(409);
+    expect(db.approvalReceipts).toHaveLength(0);
+    expect(db.rows[0]).toMatchObject({
+      version: secondSubject.version,
+      recipe_digest: secondSubject.recipeDigest,
+      status: 'pending',
+    });
+  });
+
+  test('records one exact approval receipt when concurrent decisions race', async () => {
+    const db = new FakeD1();
+    const env = makeApprovalEnv(db);
+    const pushed = await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      env,
+    );
+    const subject = (await pushed.json()) as { version: number; recipeDigest: string };
+    const body = {
+      action: 'approve',
+      version: subject.version,
+      recipeDigest: subject.recipeDigest,
+    };
+    const decisions = await Promise.all([
+      app.fetch(approvalRequest('slugify', body), env),
+      app.fetch(approvalRequest('slugify', body), env),
+    ]);
+
+    expect(decisions.map((decision) => decision.status).sort()).toEqual([200, 409]);
+    expect(db.approvalReceipts).toHaveLength(1);
+    expect(db.approvalReceipts[0]).toMatchObject({
+      recipe_version: subject.version,
+      recipe_digest: subject.recipeDigest,
+      action: 'approve',
+    });
+    expect(db.rows[0]).toMatchObject({
+      status: 'enabled',
+      approved_version: subject.version,
+      approved_digest: subject.recipeDigest,
+      reviewed_version: subject.version,
+      reviewed_digest: subject.recipeDigest,
+    });
+  });
+
+  test('preserves immutable version snapshots and approval receipts across revisions', async () => {
+    const db = new FakeD1();
+    const env = makeApprovalEnv(db);
+    const first = await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify(sample) }),
+      env,
+    );
+    const firstSubject = (await first.json()) as { version: number; recipeDigest: string };
+    const approved = await app.fetch(
+      approvalRequest('slugify', {
+        action: 'approve',
+        version: firstSubject.version,
+        recipeDigest: firstSubject.recipeDigest,
+      }),
+      env,
+    );
+    expect(approved.status).toBe(200);
+
+    const revisedCode = 'return { slug: ctx.input.text.toLowerCase() };';
+    const second = await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...sample,
+          description: 'turn text into a lowercase slug',
+          code: revisedCode,
+        }),
+      }),
+      env,
+    );
+    expect(second.status).toBe(200);
+
+    expect(db.recipeVersions).toEqual([
+      expect.objectContaining({
+        recipe_version: 1,
+        recipe_digest: firstSubject.recipeDigest,
+        code: sample.code,
+      }),
+      expect.objectContaining({ recipe_version: 2, code: revisedCode }),
+    ]);
+    expect(db.approvalReceipts).toEqual([
+      expect.objectContaining({
+        recipe_version: 1,
+        recipe_digest: firstSubject.recipeDigest,
+        source_code: sample.code,
+      }),
+    ]);
+    expect(db.rows[0]).toMatchObject({ version: 2, code: revisedCode, status: 'pending' });
+  });
+
+  test('attributes shared usage to the caller while preserving the recipe owner', async () => {
+    const db = new FakeD1();
+    const owner = makeEnvForDb(db, 'alice');
+    const caller = makeEnvForDb(db, 'bob');
+    await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'sharedUsageAttribution', visibility: 'shared' }),
+      }),
+      owner,
+    );
+
+    const usage = await app.fetch(
+      req('/recipe/sharedUsageAttribution/usage', {
+        method: 'POST',
+        body: JSON.stringify({ eventId: 'bob-shared-use', version: 1, outcome: 'success' }),
+      }),
+      caller,
+    );
+
+    expect(usage.status).toBe(200);
+    expect(db.usageReports).toEqual([
+      expect.objectContaining({
+        id: 'bob-shared-use',
+        owner: 'alice',
+        recipe_name: 'sharedUsageAttribution',
+        reporter: 'bob',
+        version: 1,
+      }),
+    ]);
   });
 });
 
@@ -104,7 +550,11 @@ describe('routes round-trip', () => {
       env,
     );
     expect(post.status).toBe(201);
-    expect(await post.json()).toEqual({ name: 'slugify', version: 1 });
+    expect(await post.json()).toMatchObject({
+      name: 'slugify',
+      version: 1,
+      recipeDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
 
     const list = await app.fetch(req('/recipes'), env);
     const listBody = (await list.json()) as { recipes: Array<Record<string, unknown>> };
@@ -345,7 +795,11 @@ describe('routes round-trip', () => {
       env,
     );
     expect(again.status).toBe(200);
-    expect(await again.json()).toEqual({ name: 'slugify', version: 2 });
+    expect(await again.json()).toMatchObject({
+      name: 'slugify',
+      version: 2,
+      recipeDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
 
     const get = await app.fetch(req('/recipe/slugify'), env);
     const full = (await get.json()) as { version: number; description: string };
@@ -364,7 +818,8 @@ describe('routes round-trip', () => {
   test('invalid list scope fails closed instead of silently falling back to owner', async () => {
     const res = await app.fetch(req('/recipes?scope=recipient'), env);
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body).toEqual({
       error: 'scope must be owner or shared',
       code: 'InvalidInput',
     });
@@ -516,5 +971,213 @@ describe('F3: multi-owner trust (token -> owner) with cross-owner isolation', ()
     expect(del.status).toBe(404); // alice has no such recipe to delete; bob's is untouched
     const bobStill = await app.fetch(as(BOB, '/recipe/bobowned'), env);
     expect(bobStill.status).toBe(200);
+  });
+
+  test('G5 legacy recipes without a canonical digest remain unattestable until re-pushed', async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    const created = await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'g5legacy' }),
+      }),
+      env,
+    );
+    const body = (await created.json()) as { version: number; recipeDigest: string };
+    db.rows[0].recipe_digest = null;
+
+    const attestation = await app.fetch(
+      as(BOB, '/recipe/g5legacy/attestations', {
+        method: 'POST',
+        body: JSON.stringify({
+          version: body.version,
+          recipeDigest: body.recipeDigest,
+          witnessReceiptSha256: 'c'.repeat(64),
+        }),
+      }),
+      env,
+    );
+    expect(attestation.status).toBe(409);
+  });
+
+  test('G5 attestations bind only Bob’s current private recipe subject and expose no code', async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    const receiptA = 'a'.repeat(64);
+    const receiptB = 'b'.repeat(64);
+    const created = await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'g5private' }),
+      }),
+      env,
+    );
+    const createdBody = (await created.json()) as { version: number; recipeDigest?: string };
+    expect(created.status).toBe(201);
+    expect(createdBody.recipeDigest).toMatch(/^[a-f0-9]{64}$/);
+    const subject = {
+      version: createdBody.version,
+      recipeDigest: createdBody.recipeDigest,
+      witnessReceiptSha256: receiptA,
+    };
+
+    const first = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', { method: 'POST', body: JSON.stringify(subject) }),
+      env,
+    );
+    expect(first.status).toBe(201);
+    const retry = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', { method: 'POST', body: JSON.stringify(subject) }),
+      env,
+    );
+    expect(retry.status).toBe(200);
+    const read = await app.fetch(
+      as(
+        BOB,
+        `/recipe/g5private/attestations?version=${subject.version}&recipeDigest=${subject.recipeDigest}`,
+      ),
+      env,
+    );
+    expect(read.status).toBe(200);
+    const readText = await read.text();
+    expect(readText).not.toContain(sample.code);
+    expect(readText).not.toContain('code');
+
+    const malicious = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...subject,
+          code: 'leak',
+          authority: 'release',
+          issuer: 'x',
+          signature: 'x',
+        }),
+      }),
+      env,
+    );
+    expect(malicious.status).toBe(400);
+
+    const update = await app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'g5private', description: 'changed' }),
+      }),
+      env,
+    );
+    const updateBody = (await update.json()) as { version: number; recipeDigest: string };
+    expect(updateBody.version).toBe(2);
+    expect(updateBody.recipeDigest).not.toBe(subject.recipeDigest);
+    const stale = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', { method: 'POST', body: JSON.stringify(subject) }),
+      env,
+    );
+    expect(stale.status).toBe(409);
+    const equivocated = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', {
+        method: 'POST',
+        body: JSON.stringify({
+          version: updateBody.version,
+          recipeDigest: updateBody.recipeDigest,
+          witnessReceiptSha256: receiptA,
+        }),
+      }),
+      env,
+    );
+    expect(equivocated.status).toBe(409);
+    const secondReceipt = await app.fetch(
+      as(BOB, '/recipe/g5private/attestations', {
+        method: 'POST',
+        body: JSON.stringify({
+          version: updateBody.version,
+          recipeDigest: updateBody.recipeDigest,
+          witnessReceiptSha256: receiptB,
+        }),
+      }),
+      env,
+    );
+    expect(secondReceipt.status).toBe(201);
+
+    const aliceWrite = await app.fetch(
+      as(ALICE, '/recipe/g5private/attestations', {
+        method: 'POST',
+        body: JSON.stringify(subject),
+      }),
+      env,
+    );
+    const aliceRead = await app.fetch(
+      as(
+        ALICE,
+        `/recipe/g5private/attestations?version=${subject.version}&recipeDigest=${subject.recipeDigest}`,
+      ),
+      env,
+    );
+    expect(aliceWrite.status).toBe(404);
+    expect(aliceRead.status).toBe(404);
+
+    const unauthenticated = await app.fetch(
+      new Request('https://pantry.test/recipe/g5private/attestations', { method: 'POST' }),
+      env,
+    );
+    expect(unauthenticated.status).toBe(401);
+    const attestationSelects = db.preparedSql.filter((sql) => sql.startsWith('SELECT'));
+    expect(attestationSelects.every((sql) => !/\bcode\b/i.test(sql))).toBe(true);
+    expect(attestationSelects.some((sql) => sql.startsWith('SELECT *'))).toBe(false);
+  });
+
+  test('concurrent pushes receive distinct versions and matching digests', async () => {
+    const db = new FakeD1();
+    const env = multiEnv(db);
+    let entered = 0;
+    let markReady: () => void = () => {};
+    let releaseWrites: () => void = () => {};
+    const ready = new Promise<void>((resolve) => {
+      markReady = resolve;
+    });
+    const writeGate = new Promise<void>((resolve) => {
+      releaseWrites = resolve;
+    });
+    db.beforeRecipeUpsert = async () => {
+      entered += 1;
+      if (entered <= 2) {
+        if (entered === 2) markReady();
+        await writeGate;
+      }
+    };
+
+    const first = app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'concurrentPush', description: 'first update' }),
+      }),
+      env,
+    );
+    const second = app.fetch(
+      as(BOB, '/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, name: 'concurrentPush', description: 'second update' }),
+      }),
+      env,
+    );
+    await ready;
+    releaseWrites();
+    const responses = await Promise.all([first, second]);
+    const results = await Promise.all(
+      responses.map(async (response) => ({
+        status: response.status,
+        body: (await response.json()) as { version: number; recipeDigest: string },
+      })),
+    );
+
+    expect(results.map((result) => result.status).sort()).toEqual([200, 201]);
+    expect(results.map((result) => result.body.version).sort()).toEqual([1, 2]);
+    expect(new Set(results.map((result) => result.body.recipeDigest)).size).toBe(2);
+    const latest = (await (await app.fetch(as(BOB, '/recipe/concurrentPush'), env)).json()) as {
+      version: number;
+      description: string;
+    };
+    const latestResult = results.find((result) => result.body.version === latest.version);
+    expect(latest).toMatchObject({ version: 2, description: 'second update' });
+    expect(latestResult?.body.recipeDigest).toMatch(/^[a-f0-9]{64}$/);
   });
 });

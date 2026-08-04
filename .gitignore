@@ -12,3 +12,4 @@ dist/
 node_modules/
 .guardrail/
 .terraloop/
+.dev.vars.ops

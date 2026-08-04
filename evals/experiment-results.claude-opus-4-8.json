@@ -1,0 +1,945 @@
+{
+  "generatedAt": "2026-08-03T10:25:25.801Z",
+  "model": "claude-opus-4-8",
+  "temperature": 1,
+  "trials": 5,
+  "tokenBasis": "provider-reported",
+  "oracle": "held-out cases executed against generated and saved code with the same comparator",
+  "arms": {
+    "generate": {
+      "meanTotalTokensPerTask": 337,
+      "passRate": 1,
+      "note": "model writes the procedure from the specification each time"
+    },
+    "pantry-reuse": {
+      "passRate": 1,
+      "passRateBasis": "saved reference code is verified against the same held-out cases before the run",
+      "note": "execution is deterministic; the model cost is retrieval only, reported in retrieval[]"
+    }
+  },
+  "perTask": [
+    {
+      "task": "slugify",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 2,
+      "meanOutputTokens": 117,
+      "meanTotalTokens": 245,
+      "referenceCodeTokens": 69
+    },
+    {
+      "task": "tweet_char_count",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 4,
+      "meanOutputTokens": 151,
+      "meanTotalTokens": 279,
+      "referenceCodeTokens": 90
+    },
+    {
+      "task": "semver_compare",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 5,
+      "meanOutputTokens": 240,
+      "meanTotalTokens": 418,
+      "referenceCodeTokens": 136
+    },
+    {
+      "task": "json_project_rename",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 3,
+      "meanOutputTokens": 110,
+      "meanTotalTokens": 246,
+      "referenceCodeTokens": 93
+    },
+    {
+      "task": "duration_humanize",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 4,
+      "meanOutputTokens": 259,
+      "meanTotalTokens": 416,
+      "referenceCodeTokens": 140
+    },
+    {
+      "task": "csv_parse_quoted",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 3,
+      "meanOutputTokens": 268,
+      "meanTotalTokens": 418,
+      "referenceCodeTokens": 190
+    }
+  ],
+  "retrieval": [
+    {
+      "catalogSize": 8,
+      "catalogTokens": 390,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 715
+    },
+    {
+      "catalogSize": 32,
+      "catalogTokens": 729,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 1308
+    },
+    {
+      "catalogSize": 128,
+      "catalogTokens": 2167,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 3440
+    }
+  ],
+  "rows": {
+    "generation": [
+      {
+        "task": "slugify",
+        "trial": 0,
+        "usage": {
+          "input": 128,
+          "output": 107,
+          "total": 235
+        },
+        "codeDigest": "b91ec0af0e77",
+        "codeChars": 175,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 1,
+        "usage": {
+          "input": 128,
+          "output": 121,
+          "total": 249
+        },
+        "codeDigest": "58664b904596",
+        "codeChars": 197,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 2,
+        "usage": {
+          "input": 128,
+          "output": 119,
+          "total": 247
+        },
+        "codeDigest": "58664b904596",
+        "codeChars": 197,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 3,
+        "usage": {
+          "input": 128,
+          "output": 121,
+          "total": 249
+        },
+        "codeDigest": "58664b904596",
+        "codeChars": 197,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 4,
+        "usage": {
+          "input": 128,
+          "output": 119,
+          "total": 247
+        },
+        "codeDigest": "58664b904596",
+        "codeChars": 197,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 0,
+        "usage": {
+          "input": 128,
+          "output": 163,
+          "total": 291
+        },
+        "codeDigest": "ac1f134f8ae4",
+        "codeChars": 343,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 1,
+        "usage": {
+          "input": 128,
+          "output": 149,
+          "total": 277
+        },
+        "codeDigest": "69ae11ce3be0",
+        "codeChars": 300,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 2,
+        "usage": {
+          "input": 128,
+          "output": 149,
+          "total": 277
+        },
+        "codeDigest": "7594edb738b2",
+        "codeChars": 310,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 3,
+        "usage": {
+          "input": 128,
+          "output": 146,
+          "total": 274
+        },
+        "codeDigest": "49b61fae4cda",
+        "codeChars": 307,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 4,
+        "usage": {
+          "input": 128,
+          "output": 149,
+          "total": 277
+        },
+        "codeDigest": "7594edb738b2",
+        "codeChars": 310,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 0,
+        "usage": {
+          "input": 178,
+          "output": 217,
+          "total": 395
+        },
+        "codeDigest": "3617f04bb453",
+        "codeChars": 407,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 1,
+        "usage": {
+          "input": 178,
+          "output": 237,
+          "total": 415
+        },
+        "codeDigest": "408a50604e66",
+        "codeChars": 449,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 2,
+        "usage": {
+          "input": 178,
+          "output": 265,
+          "total": 443
+        },
+        "codeDigest": "1a9c04ed5dfb",
+        "codeChars": 474,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 3,
+        "usage": {
+          "input": 178,
+          "output": 220,
+          "total": 398
+        },
+        "codeDigest": "cde44c89342b",
+        "codeChars": 407,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 4,
+        "usage": {
+          "input": 178,
+          "output": 260,
+          "total": 438
+        },
+        "codeDigest": "80147bd0ca3e",
+        "codeChars": 493,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 0,
+        "usage": {
+          "input": 136,
+          "output": 114,
+          "total": 250
+        },
+        "codeDigest": "a8d7feed1696",
+        "codeChars": 285,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 1,
+        "usage": {
+          "input": 136,
+          "output": 110,
+          "total": 246
+        },
+        "codeDigest": "d21a6e8b8f79",
+        "codeChars": 275,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 2,
+        "usage": {
+          "input": 136,
+          "output": 108,
+          "total": 244
+        },
+        "codeDigest": "832fde0231d8",
+        "codeChars": 262,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 3,
+        "usage": {
+          "input": 136,
+          "output": 112,
+          "total": 248
+        },
+        "codeDigest": "d21a6e8b8f79",
+        "codeChars": 275,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 4,
+        "usage": {
+          "input": 136,
+          "output": 108,
+          "total": 244
+        },
+        "codeDigest": "832fde0231d8",
+        "codeChars": 262,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 0,
+        "usage": {
+          "input": 157,
+          "output": 270,
+          "total": 427
+        },
+        "codeDigest": "17246cd7155f",
+        "codeChars": 576,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 1,
+        "usage": {
+          "input": 157,
+          "output": 270,
+          "total": 427
+        },
+        "codeDigest": "17246cd7155f",
+        "codeChars": 576,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 2,
+        "usage": {
+          "input": 157,
+          "output": 227,
+          "total": 384
+        },
+        "codeDigest": "eefb09b85828",
+        "codeChars": 483,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 3,
+        "usage": {
+          "input": 157,
+          "output": 263,
+          "total": 420
+        },
+        "codeDigest": "38e85332adb7",
+        "codeChars": 545,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 4,
+        "usage": {
+          "input": 157,
+          "output": 263,
+          "total": 420
+        },
+        "codeDigest": "740739c3918b",
+        "codeChars": 545,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 0,
+        "usage": {
+          "input": 150,
+          "output": 272,
+          "total": 422
+        },
+        "codeDigest": "5997b64b88e5",
+        "codeChars": 663,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 1,
+        "usage": {
+          "input": 150,
+          "output": 262,
+          "total": 412
+        },
+        "codeDigest": "40b68df085b7",
+        "codeChars": 626,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 2,
+        "usage": {
+          "input": 150,
+          "output": 272,
+          "total": 422
+        },
+        "codeDigest": "5997b64b88e5",
+        "codeChars": 663,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 3,
+        "usage": {
+          "input": 150,
+          "output": 272,
+          "total": 422
+        },
+        "codeDigest": "5997b64b88e5",
+        "codeChars": 663,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 4,
+        "usage": {
+          "input": 150,
+          "output": 262,
+          "total": 412
+        },
+        "codeDigest": "47acb540a96f",
+        "codeChars": 640,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      }
+    ],
+    "retrieval": [
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 702,
+          "output": 5,
+          "total": 707
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 702,
+          "output": 9,
+          "total": 711
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 752,
+          "output": 7,
+          "total": 759
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 710,
+          "output": 8,
+          "total": 718
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 731,
+          "output": 8,
+          "total": 739
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 724,
+          "output": 11,
+          "total": 735
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 689,
+          "output": 5,
+          "total": 694
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 687,
+          "output": 5,
+          "total": 692
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 679,
+          "output": 5,
+          "total": 684
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1295,
+          "output": 5,
+          "total": 1300
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1295,
+          "output": 9,
+          "total": 1304
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1345,
+          "output": 7,
+          "total": 1352
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1303,
+          "output": 8,
+          "total": 1311
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1324,
+          "output": 8,
+          "total": 1332
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1317,
+          "output": 11,
+          "total": 1328
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1282,
+          "output": 5,
+          "total": 1287
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1280,
+          "output": 5,
+          "total": 1285
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1272,
+          "output": 5,
+          "total": 1277
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3427,
+          "output": 5,
+          "total": 3432
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3427,
+          "output": 9,
+          "total": 3436
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3477,
+          "output": 7,
+          "total": 3484
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3435,
+          "output": 8,
+          "total": 3443
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3456,
+          "output": 8,
+          "total": 3464
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3449,
+          "output": 11,
+          "total": 3460
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3414,
+          "output": 5,
+          "total": 3419
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3412,
+          "output": 5,
+          "total": 3417
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3404,
+          "output": 5,
+          "total": 3409
+        }
+      }
+    ]
+  }
+}

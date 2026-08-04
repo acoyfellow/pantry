@@ -4,7 +4,13 @@
 // recipe pushed to pantry are the same shape. pantry stores and hands these
 // back; it never runs the `code`.
 
-export const RECIPE_STATUSES = ['pending', 'enabled', 'disabled'] as const;
+export const RECIPE_STATUSES = [
+  'pending',
+  'enabled',
+  'disabled',
+  'rejected',
+  'superseded',
+] as const;
 export type RecipeStatus = (typeof RECIPE_STATUSES)[number];
 export const RECIPE_VISIBILITIES = ['private', 'shared'] as const;
 export type RecipeVisibility = (typeof RECIPE_VISIBILITIES)[number];
@@ -25,6 +31,11 @@ export type RecipeRow = {
   tags_json?: string;
   run_count?: number;
   last_run_at?: string | null;
+  recipe_digest?: string | null;
+  approved_version?: number | null;
+  approved_digest?: string | null;
+  reviewed_version?: number | null;
+  reviewed_digest?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,6 +179,46 @@ export function lintRecipeCode(code: string): string[] {
   return warnings;
 }
 
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const object = value as Record<string, unknown>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(',')}}`;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)),
+  );
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function recipeSnapshotDigest(
+  owner: string,
+  recipe: RecipeInput,
+  version: number,
+): Promise<string> {
+  return sha256Hex(
+    canonicalJson({
+      schema: 'pantry/recipe-snapshot/v0',
+      owner,
+      name: recipe.name,
+      version,
+      description: recipe.description,
+      inputSchema: recipe.inputSchema,
+      code: recipe.code,
+      capabilities: recipe.capabilities,
+      status: recipe.status,
+      visibility: recipe.visibility ?? 'private',
+      tags: recipe.tags ?? [],
+      sourceRunId: recipe.sourceRunId,
+    }),
+  );
+}
+
 export function validateRecipeInput(input: unknown): RecipeInput {
   const body = assertObject(input, 'recipe');
   const name = cleanName(body.name);
@@ -177,7 +228,15 @@ export function validateRecipeInput(input: unknown): RecipeInput {
   const capabilities = cleanCapabilities(body.capabilities);
   const tags = cleanTags(body.tags);
   const status: RecipeStatus =
-    body.status === 'pending' ? 'pending' : body.status === 'disabled' ? 'disabled' : 'enabled';
+    body.status === 'pending'
+      ? 'pending'
+      : body.status === 'disabled'
+        ? 'disabled'
+        : body.status === 'rejected'
+          ? 'rejected'
+          : body.status === 'superseded'
+            ? 'superseded'
+            : 'enabled';
   const visibility: RecipeVisibility = body.visibility === 'shared' ? 'shared' : 'private';
   const sourceRunId =
     typeof body.sourceRunId === 'string' && body.sourceRunId.trim()
@@ -214,6 +273,13 @@ export function listEntry(row: RecipeRow) {
     lastRunAt: row.last_run_at ?? null,
     shareCandidate: (row.visibility ?? 'private') === 'private' && (row.run_count ?? 0) >= 5,
     updatedAt: row.updated_at,
+    recipeDigest: row.recipe_digest ?? null,
+    ...(row.approved_version !== undefined
+      ? {
+          approvedVersion: row.approved_version ?? null,
+          approvedDigest: row.approved_digest ?? null,
+        }
+      : {}),
   };
 }
 
@@ -230,21 +296,53 @@ export function fullRecipe(row: RecipeRow) {
 type RecipeMetadata = ReturnType<typeof listEntry>;
 export type RecipeListEntry = Omit<
   RecipeMetadata,
-  'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+  | 'visibility'
+  | 'author'
+  | 'tags'
+  | 'runCount'
+  | 'lastRunAt'
+  | 'shareCandidate'
+  | 'recipeDigest'
+  | 'approvedVersion'
+  | 'approvedDigest'
 > &
   Partial<
     Pick<
       RecipeMetadata,
-      'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+      | 'visibility'
+      | 'author'
+      | 'tags'
+      | 'runCount'
+      | 'lastRunAt'
+      | 'shareCandidate'
+      | 'recipeDigest'
+      | 'approvedVersion'
+      | 'approvedDigest'
     >
   >;
 export type FullRecipe = Omit<
   ReturnType<typeof fullRecipe>,
-  'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+  | 'visibility'
+  | 'author'
+  | 'tags'
+  | 'runCount'
+  | 'lastRunAt'
+  | 'shareCandidate'
+  | 'recipeDigest'
+  | 'approvedVersion'
+  | 'approvedDigest'
 > &
   Partial<
     Pick<
       ReturnType<typeof fullRecipe>,
-      'visibility' | 'author' | 'tags' | 'runCount' | 'lastRunAt' | 'shareCandidate'
+      | 'visibility'
+      | 'author'
+      | 'tags'
+      | 'runCount'
+      | 'lastRunAt'
+      | 'shareCandidate'
+      | 'recipeDigest'
+      | 'approvedVersion'
+      | 'approvedDigest'
     >
   >;

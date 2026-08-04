@@ -21,7 +21,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { runRecipe, checkRecipe } from '../examples/run-recipe.ts';
+import { checkRecipe, runRecipe } from '../examples/run-recipe.ts';
 import { RUN_CAVEAT, describeError, makeClient } from './surface.ts';
 
 type TextResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };

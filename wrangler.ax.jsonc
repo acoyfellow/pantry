@@ -1,16 +1,15 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pantry-worker",
+  "name": "pantry-work",
   "main": "src/worker.ts",
-  "account_id": "bfcb6ac5b3ceaf42a09607f6f7925823",
+  "account_id": "31b91e7f9954ad8aa334d46f012bd8ed",
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Only public surface is the gated custom domain; no workers.dev URL.
   "workers_dev": false,
-  "routes": [{ "pattern": "pantry.coey.dev", "custom_domain": true }],
+  "routes": [{ "pattern": "pantry.ax.cloudflare.dev", "custom_domain": true }],
   "assets": {
-    "directory": "./app/dist/public",
+    "directory": "./app/dist/ops",
     "binding": "APP_ASSETS",
     "run_worker_first": ["/health", "/recipes", "/recipes/*", "/recipe/*", "/api/*"]
   },
@@ -18,13 +17,12 @@
     {
       "binding": "DB",
       "database_name": "pantry-db",
-      "database_id": "40cd8070-e6d1-4e6a-aeea-a0cf0db9fe9a",
+      "database_id": "e7c3ab28-b74d-4a0f-92c4-091ad855ccef",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
-    "PANTRY_OWNER": "default"
+    "PANTRY_OWNER": "agent-experience",
+    "PANTRY_ACCESS_ONLY": "true"
   }
-  // PANTRY_TOKEN is a secret, set with: wrangler secret put PANTRY_TOKEN
-  // For local dev put it in .dev.vars (gitignored).
 }

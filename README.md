@@ -26,7 +26,7 @@
 
 A recipe is a named JavaScript function with an input schema, capability tags, status, version, and owner provenance. pantry keeps recipes in D1 and hands the code back when asked. It never runs a recipe. The caller fetches the exact saved source, reviews it, and chooses the execution authority.
 
-The store is private by default. A bearer token maps to one owner, and the default list shows only that owner's recipes. Many owners can share one deployment: set `PANTRY_TOKENS` to a JSON map of `{ "<token>": "<owner>" }` and each token authenticates as its own owner (single-tenant `PANTRY_TOKEN` + `PANTRY_OWNER` remain the fallback). A private recipe never crosses an owner boundary. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance, version, and status. Writes stay owner-scoped, and pantry still never runs a recipe.
+The store is private by default. Agent and CLI API access uses a bearer token mapped to one owner. Many owners can share one deployment: set `PANTRY_TOKENS` to a JSON map of `{ "<token>": "<owner>" }` and each token authenticates as its own owner (single-tenant `PANTRY_TOKEN` + `PANTRY_OWNER` remain the fallback). The browser management app uses Cloudflare Access instead: configure `PANTRY_ACCESS_PRINCIPALS` as a JSON map of verified Access identities to stable principals, for example `{ "operator@example.com": "workspace-owner" }`. Configure `PANTRY_ACCESS_TEAMS` as a JSON map from those stable principals to D1 team IDs, for example `{ "workspace-owner": "workspace" }`. Add the matching `teams` and `team_members` rows through the migration-managed database; each membership role is `owner`, `approver`, or `member`. The default identity header is `Cf-Access-Authenticated-User-Email`; use `PANTRY_ACCESS_IDENTITY_HEADER` only when your Access integration supplies a different verified header. Cloudflare Access must protect the management origin and API routes. Access-authenticated management requests are accepted only when their `Origin` exactly matches the Worker origin. A private recipe never crosses an owner boundary. Shared pantry is opt-in: an author can mark their own recipe `"visibility":"shared"` so other owners may read it with author provenance, version, and status. Writes stay owner-scoped, and pantry still never runs a recipe.
 
 Think extensions are runtime-local capabilities for a Think agent; pantry is a runtime-neutral code registry where any harness fetches the exact saved source and chooses its own execution authority. Runtime extensions live inside one agent. A pantry recipe is a portable artifact any harness can fetch.
 
@@ -57,7 +57,7 @@ Field rules, enforced by `validateRecipeInput` in `src/recipe.ts`:
 - `inputSchema` is an object whose `type` is `"object"`. It defaults to `{ "type": "object", "properties": {} }` when omitted.
 - `code` is required and must be at most 32000 bytes. pantry accepts three runner shapes: a bare JavaScript function body, an `export default` function/expression, or a `module.exports` function/expression. The demo runner calls bare bodies with one argument, `ctx`; exported callables receive `(input, ctx)`.
 - `capabilities` must list at least one tag. A tag is either a scoped namespace (`workspace.*`, `machine.*`, `cloudbox.*`) or a generic dotted tag such as `text.transform`. Tags are deduplicated and sorted.
-- `status` is `"pending"`, `"enabled"`, or `"disabled"`. Unknown values become `"enabled"`; the Pi push path can save pending recipes for owner approval before enabling.
+- `status` is `"pending"`, `"enabled"`, `"disabled"`, `"rejected"`, or `"superseded"`. Unknown values become `"enabled"`; code or capability changes require a new approval before execution.
 - `sourceRunId` is an optional string, otherwise `null`.
 - `visibility` is `"private"` by default. Set `"shared"` to opt your own recipe into the shared read pool.
 - `tags` is an optional list of bounded discovery namespaces such as `mr/review` or `deploy/worker`; tags are normalized, deduplicated, and sorted.
@@ -77,11 +77,11 @@ bun run dev
 
 The migration step is required. The D1 binding is `DB` and the database is `pantry-db`; the schema lives in `migrations/0001_recipes.sql`. Without it the local database has no `recipes` table, and every route that touches D1 returns a `500` with `no such table: recipes`. Run the migration once per fresh local database. For a deployed instance, apply the same migration with `--remote` instead of `--local`.
 
-The Worker fails closed. With no `PANTRY_TOKEN` configured, every authenticated route returns `503`. A wrong or missing bearer token returns `401`. Only `/health` and the CORS preflight are open.
+The Worker fails closed. The Operations deployment is Access-only: `PANTRY_ACCESS_ONLY=true` rejects bearer credentials and requires a verified Access identity. With neither bearer-token nor Access-principal configuration, authenticated routes return `503`. A wrong or missing bearer token returns `401`. When `PANTRY_ACCESS_PRINCIPALS` is configured, an absent or unrecognized Access identity returns `401`; malformed or empty Access principal configuration returns `503`. Access-authenticated management sessions and approval routes additionally require `PANTRY_ACCESS_TEAMS` plus a matching `team_members` row; missing team configuration returns `503` and absent membership returns `403`. Team members can review approval data, while only `owner` and `approver` roles can record approval decisions. Existing bearer-token API clients retain their owner-scoped approval behavior. Only `/health` and the CORS preflight are open.
 
 ## The API
 
-The public instance lives at `https://pantry.coey.dev` (gated; the only open route is `/health`). All routes except `/health` and `OPTIONS` require `Authorization: Bearer <PANTRY_TOKEN>`. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` are set in your shell.
+The public API instance lives at `https://pantry.coey.dev`; its machine-facing routes use `Authorization: Bearer <PANTRY_TOKEN>` and its only open route is `/health`. The Operations product lives separately at `https://pantry.ax.cloudflare.dev/manage/` and is protected at the Cloudflare Access edge. Its Worker is deployed with `PANTRY_ACCESS_ONLY=true`, so legacy `PANTRY_TOKEN` and `PANTRY_TOKENS` credentials are rejected even if presented to the Operations origin. Scoped credentials created through the Access-authenticated management flow remain available to machine clients. Configure the Access application to protect `/manage/*`, `/api/*`, `/recipes*`, and `/recipe/*`, then configure `PANTRY_ACCESS_PRINCIPALS`, `PANTRY_ACCESS_TEAMS`, and matching `team_members` rows for the authorized identities. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` target the public machine API.
 
 ### `GET /health`
 
@@ -165,9 +165,23 @@ curl -X POST "$PANTRY_URL/recipe/slugify/usage" \
 
 The response reports whether the event was newly recorded, plus `runCount` and `lastRunAt`. Reports are caller assertions and can be abused by an authenticated reporter; they are signals for discovery/pruning, not proof that Pantry ran code.
 
+### `GET /approvals`
+
+Lists the authenticated owner's pending recipes for the approval page.
+
+### `GET /recipe/:name/approval-diff`
+
+Returns the current source, version, digest, capabilities, and the previous immutable approval snapshot for review.
+
+### `POST /recipe/:name/approval`
+
+Accepts `{ "action": "approve" | "reject" | "request-revision", "reason"?: string }`. Every decision writes an immutable receipt. Approval binds the current version and digest; a later push requires reapproval.
+
+The full management app is `/manage/`: it provides inventory, create/revision, approval, detail, and delete flows without accepting or storing a bearer token. It obtains its principal from the same-origin `GET /api/session` endpoint, which requires a configured Cloudflare Access identity. The endpoint returns only `{ "principal": "..." }`; bearer credentials cannot establish a browser management session. See [docs/PRODUCT.md](./docs/PRODUCT.md) for the OSS deployment and team model, and [docs/AGENT-CONNECTION.md](./docs/AGENT-CONNECTION.md) for secure agent setup.
+
 ### `GET /recipe/:name`
 
-The full recipe, including `code`. This is the call a caller makes right before reviewing and possibly running the recipe. Your own recipe wins; if missing, pantry returns the most recently updated shared recipe with that name. Returns `404` when neither exists.
+The full approved recipe, including `code`. This is the call a caller makes right before reviewing and possibly running the recipe. Pass `?version=<n>` to pin the fetch. Pending, rejected, superseded, disabled, and unapproved versions return a conflict. Your own recipe wins; if missing, pantry returns the most recently updated approved shared recipe with that name. Returns `404` when neither exists.
 
 ```sh
 curl "$PANTRY_URL/recipe/slugify" -H "authorization: Bearer $PANTRY_TOKEN"
@@ -309,6 +323,7 @@ alchemy.run.ts           deploy path (Worker + D1)
 bun install
 bunx wrangler d1 migrations apply pantry-db --local   # apply the D1 migration to local D1
 bun run dev          # wrangler dev, needs PANTRY_TOKEN in .dev.vars
+bun run build:site   # builds the public site and the Svelte management app
 bun test             # behavioral tests
 bun run typecheck    # tsc --noEmit
 bunx --bun @biomejs/biome check .

@@ -63,11 +63,30 @@ export const brandingLoopRecipe: RecipeInput = {
     type: 'object',
     properties: {
       name: { type: 'string', description: 'project name, e.g. "airlock"' },
-      domain: { type: 'string', description: 'deploy domain, e.g. "airlock.coey.dev". Defaults to <name>.coey.dev.' },
-      metaphor: { type: 'string', description: 'the brand metaphor to lean into, e.g. "a sealed chamber; a candidate held dark until a proof opens the door"' },
-      accentDirection: { type: 'string', description: 'accent direction distinct from siblings, e.g. "teal sealed-chamber, not warm orange"' },
-      projectPath: { type: 'string', description: 'absolute repo path. Defaults to /Users/jcoeyman/cloudflare/<name>.' },
-      references: { type: 'array', items: { type: 'string' }, description: 'sibling brands/assets to synthesize from (not clone). Defaults to AX/site + terrarium/deja/gateproof/cloudbox.' },
+      domain: {
+        type: 'string',
+        description: 'deploy domain, e.g. "airlock.coey.dev". Defaults to <name>.coey.dev.',
+      },
+      metaphor: {
+        type: 'string',
+        description:
+          'the brand metaphor to lean into, e.g. "a sealed chamber; a candidate held dark until a proof opens the door"',
+      },
+      accentDirection: {
+        type: 'string',
+        description:
+          'accent direction distinct from siblings, e.g. "teal sealed-chamber, not warm orange"',
+      },
+      projectPath: {
+        type: 'string',
+        description: 'absolute repo path. Defaults to /Users/jcoeyman/cloudflare/<name>.',
+      },
+      references: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'sibling brands/assets to synthesize from (not clone). Defaults to AX/site + terrarium/deja/gateproof/cloudbox.',
+      },
       previewPort: { type: 'number', description: 'free local vite preview port. Default 4199.' },
     },
     required: ['name', 'metaphor'],

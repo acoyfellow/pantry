@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-07-30T11:05:35.962Z",
+  "model": "gpt-4.1-mini",
+  "catalogSize": 128,
+  "shortlistLimit": 5,
+  "strategy": "keyword search shortlist instead of full catalog listing",
+  "matchedCorrect": 6,
+  "matchedTotal": 6,
+  "shortlistRecall": 6,
+  "falseHits": 0,
+  "unmatchedTotal": 3,
+  "meanTotalTokens": 196,
+  "rows": [
+    {
+      "task": "slugify",
+      "expected": "slugify",
+      "answer": "slugify",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 1,
+      "shortlistRecalled": true,
+      "promptTokens": 118,
+      "totalTokens": 127
+    },
+    {
+      "task": "tweet_char_count",
+      "expected": "tweet_char_count",
+      "answer": "tweet_char_count",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 3,
+      "shortlistRecalled": true,
+      "promptTokens": 268,
+      "totalTokens": 278
+    },
+    {
+      "task": "semver_compare",
+      "expected": "semver_compare",
+      "answer": "semver_compare",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 2,
+      "shortlistRecalled": true,
+      "promptTokens": 211,
+      "totalTokens": 221
+    },
+    {
+      "task": "json_project_rename",
+      "expected": "json_project_rename",
+      "answer": "json_project_rename",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 3,
+      "shortlistRecalled": true,
+      "promptTokens": 227,
+      "totalTokens": 238
+    },
+    {
+      "task": "duration_humanize",
+      "expected": "duration_humanize",
+      "answer": "duration_humanize",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 4,
+      "shortlistRecalled": true,
+      "promptTokens": 287,
+      "totalTokens": 298
+    },
+    {
+      "task": "csv_parse_quoted",
+      "expected": "csv_parse_quoted",
+      "answer": "csv_parse_quoted",
+      "correct": true,
+      "kind": "matched",
+      "shortlistSize": 3,
+      "shortlistRecalled": true,
+      "promptTokens": 262,
+      "totalTokens": 273
+    },
+    {
+      "task": "quarterly_revenue_forecast",
+      "expected": "NONE",
+      "answer": "NONE",
+      "correct": true,
+      "kind": "unmatched",
+      "shortlistSize": 0,
+      "shortlistRecalled": false,
+      "promptTokens": 82,
+      "totalTokens": 90
+    },
+    {
+      "task": "kubernetes_pod_evictor",
+      "expected": "NONE",
+      "answer": "NONE",
+      "correct": true,
+      "kind": "unmatched",
+      "shortlistSize": 1,
+      "shortlistRecalled": false,
+      "promptTokens": 86,
+      "totalTokens": 94
+    },
+    {
+      "task": "mortgage_amortization",
+      "expected": "NONE",
+      "answer": "NONE",
+      "correct": true,
+      "kind": "unmatched",
+      "shortlistSize": 5,
+      "shortlistRecalled": false,
+      "promptTokens": 137,
+      "totalTokens": 145
+    }
+  ]
+}

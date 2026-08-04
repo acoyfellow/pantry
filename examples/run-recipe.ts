@@ -53,6 +53,7 @@ export type RunResult = {
 };
 
 export type RunOptions = {
+  pinnedVersion?: number;
   // Run the best-effort parse-time guard before executing. Default: true.
   // This is a tripwire, not a sandbox — see the file header.
   guard?: boolean;
@@ -79,7 +80,9 @@ export type CheckResult = {
 // explicit choice. Proven portable across harnesses in E-WIDEN-2.
 // A binding value is either a function (`{'machine.shell': fn}` or `{shell: fn}`)
 // or a namespace object (`{machine: {shell: fn}}`) — both forms are accepted.
-type BindingValue = ((...args: unknown[]) => unknown) | Record<string, (...args: unknown[]) => unknown>;
+type BindingValue =
+  | ((...args: unknown[]) => unknown)
+  | Record<string, (...args: unknown[]) => unknown>;
 export type Bindings = Record<string, BindingValue>;
 
 // The host interfaces a recipe requires are its DECLARED capabilities — the
@@ -96,15 +99,19 @@ export type Bindings = Record<string, BindingValue>;
 // treated as non-binding and never block a run.
 const HOST_NAMESPACES = new Set(['machine', 'workspace', 'cloudbox']);
 export function requiredInterfaces(recipe: FullRecipe): string[] {
-  return [...new Set(recipe.capabilities.filter((cap) => {
-    const [ns, method] = cap.split('.');
-    // `<ns>.none` is the explicit "pure, needs no host binding" sentinel; never
-    // a requirement. Bare capability names (no namespace) are descriptive tags,
-    // not host interfaces, so they don't demand a binding either.
-    if (!cap.includes('.')) return false;
-    if (method === 'none') return false;
-    return HOST_NAMESPACES.has(ns);
-  }))].sort();
+  return [
+    ...new Set(
+      recipe.capabilities.filter((cap) => {
+        const [ns, method] = cap.split('.');
+        // `<ns>.none` is the explicit "pure, needs no host binding" sentinel; never
+        // a requirement. Bare capability names (no namespace) are descriptive tags,
+        // not host interfaces, so they don't demand a binding either.
+        if (!cap.includes('.')) return false;
+        if (method === 'none') return false;
+        return HOST_NAMESPACES.has(ns);
+      }),
+    ),
+  ].sort();
 }
 
 // Pre-flight a recipe against the provided bindings. A binding key may be a bare
@@ -227,7 +234,11 @@ type RecipeShape =
   | { kind: 'invalid'; reason: string };
 
 function isCallableNode(node: { type: string }): boolean {
-  return node.type === 'ArrowFunctionExpression' || node.type === 'FunctionExpression' || node.type === 'FunctionDeclaration';
+  return (
+    node.type === 'ArrowFunctionExpression' ||
+    node.type === 'FunctionExpression' ||
+    node.type === 'FunctionDeclaration'
+  );
 }
 
 // Strip leading line/block comments + whitespace so shape detection sees the
@@ -261,7 +272,10 @@ export function classifyRecipe(code: string): RecipeShape {
     }
     const decl = program.body.find((n: any) => n.type === 'ExportDefaultDeclaration');
     const value = decl?.declaration;
-    if (value && (isCallableNode(value) || value.type === 'Identifier' || value.type === 'CallExpression')) {
+    if (
+      value &&
+      (isCallableNode(value) || value.type === 'Identifier' || value.type === 'CallExpression')
+    ) {
       return { kind: 'callable', source: `return ${lead.replace(/^export\s+default\s*/, '')}` };
     }
     return { kind: 'invalid', reason: 'export default value is not a function' };
@@ -302,6 +316,37 @@ export function runRecipe(
   ctx: Record<string, unknown>,
   options: RunOptions = {},
 ): RunResult {
+  if (recipe.status !== 'enabled') {
+    return {
+      ok: false,
+      error: `recipe cannot run while status is '${recipe.status}'; only enabled recipes may execute`,
+      capabilities: recipe.capabilities,
+    };
+  }
+  if (!Number.isInteger(recipe.version) || recipe.version < 1) {
+    return {
+      ok: false,
+      error: 'recipe cannot run without a positive pinned version',
+      capabilities: recipe.capabilities,
+    };
+  }
+  if (options.pinnedVersion !== undefined && options.pinnedVersion !== recipe.version) {
+    return {
+      ok: false,
+      error: `recipe version ${recipe.version} does not match pinned version ${options.pinnedVersion}`,
+      capabilities: recipe.capabilities,
+    };
+  }
+  if (
+    recipe.approvedVersion !== undefined &&
+    (recipe.approvedVersion !== recipe.version || recipe.approvedDigest !== recipe.recipeDigest)
+  ) {
+    return {
+      ok: false,
+      error: 'recipe approval does not match the fetched version and digest',
+      capabilities: recipe.capabilities,
+    };
+  }
   const guard = options.guard !== false;
   if (guard) {
     const offending = scanRecipeCode(recipe.code);
@@ -344,7 +389,9 @@ export function runRecipe(
     if (key.includes('.')) {
       // Dotted key: `machine.shell` -> nsObjects.machine.shell.
       const [ns, method] = key.split('.');
-      (nsObjects[ns] ??= {})[method] = value;
+      const namespaceBindings = nsObjects[ns] ?? {};
+      namespaceBindings[method] = value;
+      nsObjects[ns] = namespaceBindings;
     } else if (typeof value === 'function') {
       // Bare function: `shell` -> a callable name.
       bareFns[key] = value;
@@ -377,7 +424,11 @@ export function runRecipe(
     // Bare bodies run as a factory. Invalid shapes fail honestly, not silently.
     const shape = classifyRecipe(recipe.code);
     if (shape.kind === 'invalid') {
-      return { ok: false, error: `recipe code shape invalid: ${shape.reason}`, capabilities: recipe.capabilities };
+      return {
+        ok: false,
+        error: `recipe code shape invalid: ${shape.reason}`,
+        capabilities: recipe.capabilities,
+      };
     }
     if (shape.kind === 'callable') {
       const loader = new Function(...argNames, `'use strict';\n${shape.source}`);

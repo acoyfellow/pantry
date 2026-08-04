@@ -16,6 +16,19 @@ export type PantryConfig = {
   fetch?: typeof fetch;
 };
 
+export type PushRecipeResult = {
+  name: string;
+  version: number;
+  recipeDigest: string;
+};
+
+export type ApprovalAction = 'approve' | 'reject' | 'request-revision';
+
+export type ApprovalResult = {
+  recipe: RecipeListEntry;
+  receipt: { id: string; digest: string; action: ApprovalAction; version: number };
+};
+
 export class PantryClient {
   private url: string | undefined;
   private token: string | undefined;
@@ -89,11 +102,23 @@ export class PantryClient {
     return (await res.json()) as { recorded: boolean; runCount: number; lastRunAt: string | null };
   }
 
-  // Returns the full recipe including code + capabilities + inputSchema.
-  // The caller decides whether to run `code`.
-  async get(name: string): Promise<FullRecipe | null> {
+  async approve(name: string, action: ApprovalAction, reason?: string): Promise<ApprovalResult> {
     this.require();
-    const res = await this.fetchImpl(`${this.url}/recipe/${encodeURIComponent(name)}`, {
+    const res = await this.fetchImpl(`${this.url}/recipe/${encodeURIComponent(name)}/approval`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),
+    });
+    if (!res.ok) throw new Error(`pantry approval failed: ${res.status}`);
+    return (await res.json()) as ApprovalResult;
+  }
+
+  // Returns the full approved recipe including code + capabilities + inputSchema.
+  // The caller decides whether to run `code`.
+  async get(name: string, version?: number): Promise<FullRecipe | null> {
+    this.require();
+    const suffix = version === undefined ? '' : `?version=${encodeURIComponent(version)}`;
+    const res = await this.fetchImpl(`${this.url}/recipe/${encodeURIComponent(name)}${suffix}`, {
       headers: this.headers(),
     });
     if (res.status === 404) return null;
@@ -101,7 +126,7 @@ export class PantryClient {
     return (await res.json()) as FullRecipe;
   }
 
-  async push(recipe: RecipeInput): Promise<{ name: string; version: number }> {
+  async push(recipe: RecipeInput): Promise<PushRecipeResult> {
     this.require();
     const res = await this.fetchImpl(`${this.url}/recipes`, {
       method: 'POST',
@@ -112,7 +137,7 @@ export class PantryClient {
       const detail = await res.text().catch(() => '');
       throw new Error(`pantry push failed: ${res.status} ${detail}`);
     }
-    return (await res.json()) as { name: string; version: number };
+    return (await res.json()) as PushRecipeResult;
   }
 
   async delete(name: string): Promise<boolean> {

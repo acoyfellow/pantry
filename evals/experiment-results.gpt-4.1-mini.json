@@ -1,0 +1,957 @@
+{
+  "generatedAt": "2026-08-03T10:27:00.239Z",
+  "model": "gpt-4.1-mini",
+  "temperature": 1,
+  "trials": 5,
+  "tokenBasis": "provider-reported",
+  "oracle": "held-out cases executed against generated and saved code with the same comparator",
+  "arms": {
+    "generate": {
+      "meanTotalTokensPerTask": 233,
+      "passRate": 0.9,
+      "note": "model writes the procedure from the specification each time"
+    },
+    "pantry-reuse": {
+      "passRate": 1,
+      "passRateBasis": "saved reference code is verified against the same held-out cases before the run",
+      "note": "execution is deterministic; the model cost is retrieval only, reported in retrieval[]"
+    }
+  },
+  "perTask": [
+    {
+      "task": "slugify",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 4,
+      "meanOutputTokens": 83,
+      "meanTotalTokens": 165,
+      "referenceCodeTokens": 69
+    },
+    {
+      "task": "tweet_char_count",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 5,
+      "meanOutputTokens": 102,
+      "meanTotalTokens": 190,
+      "referenceCodeTokens": 90
+    },
+    {
+      "task": "semver_compare",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 5,
+      "meanOutputTokens": 173,
+      "meanTotalTokens": 306,
+      "referenceCodeTokens": 136
+    },
+    {
+      "task": "json_project_rename",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 4,
+      "meanOutputTokens": 81,
+      "meanTotalTokens": 176,
+      "referenceCodeTokens": 93
+    },
+    {
+      "task": "duration_humanize",
+      "trials": 5,
+      "trialsFullyCorrect": 5,
+      "generationPassRate": 1,
+      "distinctImplementations": 5,
+      "meanOutputTokens": 173,
+      "meanTotalTokens": 290,
+      "referenceCodeTokens": 140
+    },
+    {
+      "task": "csv_parse_quoted",
+      "trials": 5,
+      "trialsFullyCorrect": 2,
+      "generationPassRate": 0.4,
+      "distinctImplementations": 5,
+      "meanOutputTokens": 167,
+      "meanTotalTokens": 271,
+      "referenceCodeTokens": 190
+    }
+  ],
+  "retrieval": [
+    {
+      "catalogSize": 8,
+      "catalogTokens": 390,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 486
+    },
+    {
+      "catalogSize": 32,
+      "catalogTokens": 729,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 825
+    },
+    {
+      "catalogSize": 128,
+      "catalogTokens": 2167,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 2263
+    }
+  ],
+  "rows": {
+    "generation": [
+      {
+        "task": "slugify",
+        "trial": 0,
+        "usage": {
+          "input": 82,
+          "output": 65,
+          "total": 147
+        },
+        "codeDigest": "3fbf24eecfac",
+        "codeChars": 179,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 1,
+        "usage": {
+          "input": 82,
+          "output": 59,
+          "total": 141
+        },
+        "codeDigest": "00bab54a5da1",
+        "codeChars": 152,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 2,
+        "usage": {
+          "input": 82,
+          "output": 65,
+          "total": 147
+        },
+        "codeDigest": "3fbf24eecfac",
+        "codeChars": 179,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 3,
+        "usage": {
+          "input": 82,
+          "output": 111,
+          "total": 193
+        },
+        "codeDigest": "096686b9623f",
+        "codeChars": 376,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "slugify",
+        "trial": 4,
+        "usage": {
+          "input": 82,
+          "output": 115,
+          "total": 197
+        },
+        "codeDigest": "83dd1a986f68",
+        "codeChars": 383,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 0,
+        "usage": {
+          "input": 88,
+          "output": 95,
+          "total": 183
+        },
+        "codeDigest": "fc4918d87961",
+        "codeChars": 314,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 1,
+        "usage": {
+          "input": 88,
+          "output": 101,
+          "total": 189
+        },
+        "codeDigest": "177be4968eac",
+        "codeChars": 327,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 2,
+        "usage": {
+          "input": 88,
+          "output": 97,
+          "total": 185
+        },
+        "codeDigest": "dc6a54a2b633",
+        "codeChars": 319,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 3,
+        "usage": {
+          "input": 88,
+          "output": 122,
+          "total": 210
+        },
+        "codeDigest": "4250ce4776e7",
+        "codeChars": 417,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 4,
+        "usage": {
+          "input": 88,
+          "output": 96,
+          "total": 184
+        },
+        "codeDigest": "5aaa95fadae7",
+        "codeChars": 313,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 0,
+        "usage": {
+          "input": 133,
+          "output": 173,
+          "total": 306
+        },
+        "codeDigest": "bcfb3a23e443",
+        "codeChars": 503,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 1,
+        "usage": {
+          "input": 133,
+          "output": 177,
+          "total": 310
+        },
+        "codeDigest": "9f75092b33de",
+        "codeChars": 489,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 2,
+        "usage": {
+          "input": 133,
+          "output": 193,
+          "total": 326
+        },
+        "codeDigest": "05b9b5d93b17",
+        "codeChars": 540,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 3,
+        "usage": {
+          "input": 133,
+          "output": 177,
+          "total": 310
+        },
+        "codeDigest": "6b029291a479",
+        "codeChars": 487,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "semver_compare",
+        "trial": 4,
+        "usage": {
+          "input": 133,
+          "output": 143,
+          "total": 276
+        },
+        "codeDigest": "94cea5e80599",
+        "codeChars": 406,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 0,
+        "usage": {
+          "input": 95,
+          "output": 80,
+          "total": 175
+        },
+        "codeDigest": "5d926b2394cc",
+        "codeChars": 302,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 1,
+        "usage": {
+          "input": 95,
+          "output": 84,
+          "total": 179
+        },
+        "codeDigest": "515381ecee3f",
+        "codeChars": 321,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 2,
+        "usage": {
+          "input": 95,
+          "output": 79,
+          "total": 174
+        },
+        "codeDigest": "9e9224e16514",
+        "codeChars": 287,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 3,
+        "usage": {
+          "input": 95,
+          "output": 80,
+          "total": 175
+        },
+        "codeDigest": "66884f96cfdb",
+        "codeChars": 317,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 4,
+        "usage": {
+          "input": 95,
+          "output": 80,
+          "total": 175
+        },
+        "codeDigest": "5d926b2394cc",
+        "codeChars": 302,
+        "passed": 3,
+        "total": 3,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 0,
+        "usage": {
+          "input": 117,
+          "output": 160,
+          "total": 277
+        },
+        "codeDigest": "0211e8a5bb12",
+        "codeChars": 503,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 1,
+        "usage": {
+          "input": 117,
+          "output": 222,
+          "total": 339
+        },
+        "codeDigest": "3db1f03e95ec",
+        "codeChars": 694,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 2,
+        "usage": {
+          "input": 117,
+          "output": 155,
+          "total": 272
+        },
+        "codeDigest": "1a30b9fae3b0",
+        "codeChars": 477,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 3,
+        "usage": {
+          "input": 117,
+          "output": 166,
+          "total": 283
+        },
+        "codeDigest": "e76e9e4bc745",
+        "codeChars": 531,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 4,
+        "usage": {
+          "input": 117,
+          "output": 161,
+          "total": 278
+        },
+        "codeDigest": "d1ccf8841cb9",
+        "codeChars": 512,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 0,
+        "usage": {
+          "input": 104,
+          "output": 165,
+          "total": 269
+        },
+        "codeDigest": "734406d2fe86",
+        "codeChars": 567,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 1,
+        "usage": {
+          "input": 104,
+          "output": 171,
+          "total": 275
+        },
+        "codeDigest": "ba115b2f3e63",
+        "codeChars": 562,
+        "passed": 0,
+        "total": 4,
+        "allPassed": false,
+        "failures": [
+          "{\"line\":\"a,b,c\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"a,\\\"b,c\\\",d\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"\\\"say \\\"\\\"hi\\\"\\\"\\\",x\"} -> {\"fields\":[\"\"]}"
+        ]
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 2,
+        "usage": {
+          "input": 104,
+          "output": 171,
+          "total": 275
+        },
+        "codeDigest": "30778c3275d2",
+        "codeChars": 580,
+        "passed": 0,
+        "total": 4,
+        "allPassed": false,
+        "failures": [
+          "{\"line\":\"a,b,c\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"a,\\\"b,c\\\",d\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"\\\"say \\\"\\\"hi\\\"\\\"\\\",x\"} -> {\"fields\":[\"\"]}"
+        ]
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 3,
+        "usage": {
+          "input": 104,
+          "output": 165,
+          "total": 269
+        },
+        "codeDigest": "8ea72867dde8",
+        "codeChars": 549,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 4,
+        "usage": {
+          "input": 104,
+          "output": 161,
+          "total": 265
+        },
+        "codeDigest": "4fee2c7b183a",
+        "codeChars": 550,
+        "passed": 0,
+        "total": 4,
+        "allPassed": false,
+        "failures": [
+          "{\"line\":\"a,b,c\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"a,\\\"b,c\\\",d\"} -> {\"fields\":[\"\"]}",
+          "{\"line\":\"\\\"say \\\"\\\"hi\\\"\\\"\\\",x\"} -> {\"fields\":[\"\"]}"
+        ]
+      }
+    ],
+    "retrieval": [
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 472,
+          "output": 2,
+          "total": 474
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 478,
+          "output": 3,
+          "total": 481
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 523,
+          "output": 3,
+          "total": 526
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 485,
+          "output": 4,
+          "total": 489
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 507,
+          "output": 4,
+          "total": 511
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 494,
+          "output": 4,
+          "total": 498
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 466,
+          "output": 1,
+          "total": 467
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 464,
+          "output": 1,
+          "total": 465
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 390,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 462,
+          "output": 1,
+          "total": 463
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 811,
+          "output": 2,
+          "total": 813
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 817,
+          "output": 3,
+          "total": 820
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 862,
+          "output": 3,
+          "total": 865
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 824,
+          "output": 4,
+          "total": 828
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 846,
+          "output": 4,
+          "total": 850
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 833,
+          "output": 4,
+          "total": 837
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 805,
+          "output": 1,
+          "total": 806
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 803,
+          "output": 1,
+          "total": 804
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 729,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 801,
+          "output": 1,
+          "total": 802
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2249,
+          "output": 2,
+          "total": 2251
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2255,
+          "output": 3,
+          "total": 2258
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2300,
+          "output": 3,
+          "total": 2303
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2262,
+          "output": 4,
+          "total": 2266
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2284,
+          "output": 4,
+          "total": 2288
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 2271,
+          "output": 4,
+          "total": 2275
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 2243,
+          "output": 1,
+          "total": 2244
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 2241,
+          "output": 1,
+          "total": 2242
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2167,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 2239,
+          "output": 1,
+          "total": 2240
+        }
+      }
+    ]
+  }
+}

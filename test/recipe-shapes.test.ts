@@ -2,15 +2,25 @@
 // Every code shape runs correctly, INCLUDING the bare arrow expression that
 // used to be silently discarded (returned undefined). Malformed shapes fail
 // honestly, never silently.
-import { test, expect } from 'bun:test';
-import { runRecipe, classifyRecipe } from '../examples/run-recipe.ts';
+import { expect, test } from 'bun:test';
+import { classifyRecipe, runRecipe } from '../examples/run-recipe.ts';
 import type { FullRecipe } from '../src/recipe.ts';
 
-const mk = (code: string): FullRecipe => ({
-  name: 't', description: '', inputSchema: { type: 'object' }, code, capabilities: [],
-  status: 'enabled', visibility: 'private', version: 1, sourceRunId: null,
-  owner: 't', createdAt: '', updatedAt: '',
-} as unknown as FullRecipe);
+const mk = (code: string): FullRecipe =>
+  ({
+    name: 't',
+    description: '',
+    inputSchema: { type: 'object' },
+    code,
+    capabilities: [],
+    status: 'enabled',
+    visibility: 'private',
+    version: 1,
+    sourceRunId: null,
+    owner: 't',
+    createdAt: '',
+    updatedAt: '',
+  }) as unknown as FullRecipe;
 
 test('bare body returns via return statement', () => {
   expect(classifyRecipe('return { n: ctx.input.x + 1 };').kind).toBe('body');

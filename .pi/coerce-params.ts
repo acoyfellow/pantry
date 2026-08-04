@@ -5,9 +5,7 @@
 // real objects instead of a string (which silently yields empty fields:
 // slugify -> slug:"undefined", project_check -> "bad project: ", and push
 // failing the typeof===object check). Mutates and returns the same object.
-export function coerceObjectParams(
-  params: Record<string, unknown>,
-): Record<string, unknown> {
+export function coerceObjectParams(params: Record<string, unknown>): Record<string, unknown> {
   for (const key of ['input', 'recipe'] as const) {
     if (typeof params[key] === 'string') {
       const s = (params[key] as string).trim();

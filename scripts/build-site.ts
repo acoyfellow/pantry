@@ -1,38 +1,58 @@
-// Build the pantry static site into app/dist.
-//
-// The site is two hand-written static pages (a landing page and a docs page)
-// plus a stylesheet and a favicon. There is no framework and no bundling: the
-// "build" copies the source files into app/dist and lays out the pretty path
-// /docs as docs/index.html so the assets binding serves it without a redirect.
-//
-// Run: bun run build:site
-
-import { cpSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = dirname(dirname(fileURLToPath(import.meta.url))); // repo root
-const appDir = join(root, 'app');
-const distDir = join(appDir, 'dist');
+type BuildTarget = 'ops' | 'public';
 
-// The files that make up the site source (everything in app/ except dist/).
-const sources = readdirSync(appDir).filter((name) => name !== 'dist');
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const appDir = join(root, 'app');
+const targetArgument = process.argv[2] ?? 'public';
+
+if (targetArgument !== 'public' && targetArgument !== 'ops') {
+  throw new Error(`Unknown build target: ${targetArgument}`);
+}
+
+const target: BuildTarget = targetArgument;
+const distDir = join(appDir, 'dist', target);
+const publicAssets = [
+  'docs.html',
+  'favicon.svg',
+  'hero-f1.jpg',
+  'hero-f2.jpg',
+  'hero-f3.jpg',
+  'index.html',
+  'logo.svg',
+  'proof.html',
+  'style.css',
+];
 
 rmSync(distDir, { recursive: true, force: true });
 mkdirSync(distDir, { recursive: true });
 
-for (const name of sources) {
-  const from = join(appDir, name);
-  if (statSync(from).isDirectory()) continue; // site is flat; skip nested dirs
-  cpSync(from, join(distDir, name));
+for (const asset of publicAssets) {
+  cpSync(join(appDir, asset), join(distDir, asset));
 }
 
-// Pretty paths: serve /docs and /proof as */index.html so the assets binding
-// resolves extensionless URLs without a trailing-slash redirect.
-mkdirSync(join(distDir, 'docs'), { recursive: true });
-cpSync(join(appDir, 'docs.html'), join(distDir, 'docs', 'index.html'));
-mkdirSync(join(distDir, 'proof'), { recursive: true });
-cpSync(join(appDir, 'proof.html'), join(distDir, 'proof', 'index.html'));
+for (const page of ['docs', 'proof']) {
+  mkdirSync(join(distDir, page), { recursive: true });
+  cpSync(join(appDir, `${page}.html`), join(distDir, page, 'index.html'));
+}
 
-const built = readdirSync(distDir);
-console.log(`built app/dist: ${built.join(', ')}`);
+if (target === 'ops') {
+  execFileSync(
+    process.execPath,
+    [
+      'x',
+      'vite',
+      'build',
+      '--config',
+      'app-ui/vite.config.ts',
+      '--outDir',
+      '../app/dist/ops/manage',
+    ],
+    { cwd: root, stdio: 'inherit' },
+  );
+}
+
+console.log(`built ${target} assets: ${readdirSync(distDir).join(', ')}`);

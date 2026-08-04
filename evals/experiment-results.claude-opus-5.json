@@ -1,0 +1,597 @@
+{
+  "generatedAt": "2026-08-03T10:18:29.398Z",
+  "model": "claude-opus-5",
+  "temperature": 1,
+  "trials": 1,
+  "tokenBasis": "provider-reported",
+  "oracle": "held-out cases executed against generated and saved code with the same comparator",
+  "arms": {
+    "generate": {
+      "meanTotalTokensPerTask": 360,
+      "passRate": 0.3333333333333333,
+      "note": "model writes the procedure from the specification each time"
+    },
+    "pantry-reuse": {
+      "passRate": 1,
+      "passRateBasis": "saved reference code is verified against the same held-out cases before the run",
+      "note": "execution is deterministic; the model cost is retrieval only, reported in retrieval[]"
+    }
+  },
+  "perTask": [
+    {
+      "task": "slugify",
+      "trials": 1,
+      "trialsFullyCorrect": 1,
+      "generationPassRate": 1,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 409,
+      "meanTotalTokens": 537,
+      "referenceCodeTokens": 69
+    },
+    {
+      "task": "tweet_char_count",
+      "trials": 1,
+      "trialsFullyCorrect": 0,
+      "generationPassRate": 0,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 2,
+      "meanTotalTokens": 130,
+      "referenceCodeTokens": 90
+    },
+    {
+      "task": "semver_compare",
+      "trials": 1,
+      "trialsFullyCorrect": 0,
+      "generationPassRate": 0,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 287,
+      "meanTotalTokens": 436,
+      "referenceCodeTokens": 136
+    },
+    {
+      "task": "json_project_rename",
+      "trials": 1,
+      "trialsFullyCorrect": 0,
+      "generationPassRate": 0,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 2,
+      "meanTotalTokens": 138,
+      "referenceCodeTokens": 93
+    },
+    {
+      "task": "duration_humanize",
+      "trials": 1,
+      "trialsFullyCorrect": 1,
+      "generationPassRate": 1,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 425,
+      "meanTotalTokens": 582,
+      "referenceCodeTokens": 140
+    },
+    {
+      "task": "csv_parse_quoted",
+      "trials": 1,
+      "trialsFullyCorrect": 0,
+      "generationPassRate": 0,
+      "distinctImplementations": 1,
+      "meanOutputTokens": 188,
+      "meanTotalTokens": 338,
+      "referenceCodeTokens": 190
+    }
+  ],
+  "retrieval": [
+    {
+      "catalogSize": 8,
+      "catalogTokens": 366,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 0,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 683
+    },
+    {
+      "catalogSize": 32,
+      "catalogTokens": 705,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 2,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 1281
+    },
+    {
+      "catalogSize": 128,
+      "catalogTokens": 2143,
+      "matchedCorrect": 6,
+      "matchedTotal": 6,
+      "falseHits": 1,
+      "unmatchedTotal": 3,
+      "meanRetrievalTotalTokens": 3410
+    }
+  ],
+  "rows": {
+    "generation": [
+      {
+        "task": "slugify",
+        "trial": 0,
+        "usage": {
+          "input": 128,
+          "output": 409,
+          "total": 537
+        },
+        "codeDigest": "69a14ac267f7",
+        "codeChars": 435,
+        "passed": 4,
+        "total": 4,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "tweet_char_count",
+        "trial": 0,
+        "usage": {
+          "input": 128,
+          "output": 2,
+          "total": 130
+        },
+        "codeDigest": "e3b0c44298fc",
+        "codeChars": 0,
+        "passed": 0,
+        "total": 4,
+        "allPassed": false,
+        "failures": [
+          "{\"text\":\"hello\"} -> undefined",
+          "{\"text\":\"see https://example.com\"} -> undefined",
+          "{\"text\":\"a https://a.co b http://averylongdomainname.example.org/path c\"} -> undefined"
+        ]
+      },
+      {
+        "task": "semver_compare",
+        "trial": 0,
+        "usage": {
+          "input": 149,
+          "output": 287,
+          "total": 436
+        },
+        "codeDigest": "e98db0ab4d8c",
+        "codeChars": 468,
+        "passed": 3,
+        "total": 4,
+        "allPassed": false,
+        "failures": ["{\"a\":\"v1.2\",\"b\":\"1.2.0\"} -> {\"result\":-1}"]
+      },
+      {
+        "task": "json_project_rename",
+        "trial": 0,
+        "usage": {
+          "input": 136,
+          "output": 2,
+          "total": 138
+        },
+        "codeDigest": "e3b0c44298fc",
+        "codeChars": 0,
+        "passed": 0,
+        "total": 3,
+        "allPassed": false,
+        "failures": [
+          "{\"fields\":{\"id\":\"userId\",\"name\":\"label\"},\"records\":[{\"id\":1,\"ignore\":true,\"name\":\"Ada\"}]} -> undefined",
+          "{\"fields\":{\"a\":\"b\"},\"records\":[]} -> undefined",
+          "{\"fields\":{\"a\":\"x\"},\"records\":[{\"a\":1},{\"a\":2}]} -> undefined"
+        ]
+      },
+      {
+        "task": "duration_humanize",
+        "trial": 0,
+        "usage": {
+          "input": 157,
+          "output": 425,
+          "total": 582
+        },
+        "codeDigest": "4a4f4013c33a",
+        "codeChars": 470,
+        "passed": 5,
+        "total": 5,
+        "allPassed": true,
+        "failures": []
+      },
+      {
+        "task": "csv_parse_quoted",
+        "trial": 0,
+        "usage": {
+          "input": 150,
+          "output": 188,
+          "total": 338
+        },
+        "codeDigest": "f0f912e4854a",
+        "codeChars": 36,
+        "passed": 0,
+        "total": 4,
+        "allPassed": false,
+        "failures": [
+          "{\"line\":\"a,b,c\"} threw Unexpected EOF",
+          "{\"line\":\"a,\\\"b,c\\\",d\"} threw Unexpected EOF",
+          "{\"line\":\"\\\"say \\\"\\\"hi\\\"\\\"\\\",x\"} threw Unexpected EOF"
+        ]
+      }
+    ],
+    "retrieval": [
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 673,
+          "output": 5,
+          "total": 678
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 673,
+          "output": 9,
+          "total": 682
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 694,
+          "output": 7,
+          "total": 701
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 681,
+          "output": 8,
+          "total": 689
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 702,
+          "output": 8,
+          "total": 710
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 695,
+          "output": 11,
+          "total": 706
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 660,
+          "output": 5,
+          "total": 665
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 658,
+          "output": 5,
+          "total": 663
+        }
+      },
+      {
+        "catalogSize": 8,
+        "catalogTokens": 366,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 650,
+          "output": 5,
+          "total": 655
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1266,
+          "output": 5,
+          "total": 1271
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1266,
+          "output": 9,
+          "total": 1275
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1287,
+          "output": 7,
+          "total": 1294
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1274,
+          "output": 8,
+          "total": 1282
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1295,
+          "output": 8,
+          "total": 1303
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 1288,
+          "output": 11,
+          "total": 1299
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1253,
+          "output": 18,
+          "total": 1271
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "",
+        "correct": false,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1251,
+          "output": 20,
+          "total": 1271
+        }
+      },
+      {
+        "catalogSize": 32,
+        "catalogTokens": 705,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "",
+        "correct": false,
+        "kind": "unmatched",
+        "usage": {
+          "input": 1243,
+          "output": 20,
+          "total": 1263
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "slugify",
+        "expected": "slugify",
+        "answer": "slugify",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3398,
+          "output": 5,
+          "total": 3403
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "tweet_char_count",
+        "expected": "tweet_char_count",
+        "answer": "tweet_char_count",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3398,
+          "output": 9,
+          "total": 3407
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "semver_compare",
+        "expected": "semver_compare",
+        "answer": "semver_compare",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3419,
+          "output": 7,
+          "total": 3426
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "json_project_rename",
+        "expected": "json_project_rename",
+        "answer": "json_project_rename",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3406,
+          "output": 8,
+          "total": 3414
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "duration_humanize",
+        "expected": "duration_humanize",
+        "answer": "duration_humanize",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3427,
+          "output": 8,
+          "total": 3435
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "csv_parse_quoted",
+        "expected": "csv_parse_quoted",
+        "answer": "csv_parse_quoted",
+        "correct": true,
+        "kind": "matched",
+        "usage": {
+          "input": 3420,
+          "output": 11,
+          "total": 3431
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "quarterly_revenue_forecast",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3385,
+          "output": 5,
+          "total": 3390
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "kubernetes_pod_evictor",
+        "expected": "NONE",
+        "answer": "",
+        "correct": false,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3383,
+          "output": 20,
+          "total": 3403
+        }
+      },
+      {
+        "catalogSize": 128,
+        "catalogTokens": 2143,
+        "task": "mortgage_amortization",
+        "expected": "NONE",
+        "answer": "NONE",
+        "correct": true,
+        "kind": "unmatched",
+        "usage": {
+          "input": 3375,
+          "output": 5,
+          "total": 3380
+        }
+      }
+    ]
+  }
+}

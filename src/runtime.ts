@@ -13,13 +13,15 @@
 // ── Host interface contracts ────────────────────────────────────────────────
 
 /** A shell command runner. Satisfied by any harness with a shell. */
-export interface ShellInterface {
-  (args: { command: string; cwd?: string; timeoutMs?: number }): Promise<{
-    stdout: string;
-    stderr?: string;
-    exitCode?: number;
-  }>;
-}
+export type ShellInterface = (args: {
+  command: string;
+  cwd?: string;
+  timeoutMs?: number;
+}) => Promise<{
+  stdout: string;
+  stderr?: string;
+  exitCode?: number;
+}>;
 
 /** File reads/writes/listing scoped to the harness's own workspace. */
 export interface WorkspaceInterface {

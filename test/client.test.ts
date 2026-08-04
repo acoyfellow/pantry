@@ -72,13 +72,13 @@ describe('PantryClient', () => {
     expect(await client.get('missing')).toBeNull();
   });
 
-  test('push posts JSON and returns name/version', async () => {
+  test('push posts JSON and returns name, version, and recipe digest', async () => {
     const { fn, calls } = fakeFetch(() =>
-      Response.json({ name: 'slugify', version: 2 }, { status: 200 }),
+      Response.json({ name: 'slugify', version: 2, recipeDigest: 'a'.repeat(64) }, { status: 200 }),
     );
     const client = new PantryClient({ ...config, fetch: fn });
     const result = await client.push(sampleRecipe);
-    expect(result).toEqual({ name: 'slugify', version: 2 });
+    expect(result).toEqual({ name: 'slugify', version: 2, recipeDigest: 'a'.repeat(64) });
     expect(calls[0].init?.method).toBe('POST');
     expect(JSON.parse(String(calls[0].init?.body)).name).toBe('slugify');
   });

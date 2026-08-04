@@ -64,11 +64,15 @@ describe('CLI surface', () => {
         calls.push(`${init?.method ?? 'GET'} ${url}`);
         return url.toString().includes('/recipe/')
           ? Response.json(recipe)
-          : Response.json({ name: 'a', version: 2 });
+          : Response.json({ name: 'a', version: 2, recipeDigest: 'a'.repeat(64) });
       }),
     });
     expect((await client.get('a'))?.code).toBe(recipe.code);
-    expect(await client.push(input)).toEqual({ name: 'a', version: 2 });
+    expect(await client.push(input)).toEqual({
+      name: 'a',
+      version: 2,
+      recipeDigest: 'a'.repeat(64),
+    });
     expect(calls).toEqual(['GET https://x.test/recipe/a', 'POST https://x.test/recipes']);
   });
 
@@ -89,7 +93,7 @@ describe('CLI surface', () => {
             updatedAt: '',
             createdAt: '',
           });
-          return Response.json({ name: body.name, version: 1 });
+          return Response.json({ name: body.name, version: 1, recipeDigest: 'b'.repeat(64) });
         }
         const name = href.split('/recipe/')[1];
         const saved = store.get(name);
@@ -110,7 +114,11 @@ describe('CLI surface', () => {
     ];
     const { runRecipe } = await import('../examples/run-recipe.ts');
     for (const item of authored) {
-      expect(await client.push(item)).toEqual({ name: item.name, version: 1 });
+      expect(await client.push(item)).toEqual({
+        name: item.name,
+        version: 1,
+        recipeDigest: 'b'.repeat(64),
+      });
       const saved = await client.get(item.name);
       if (!saved) throw new Error('expected saved recipe');
       expect(runRecipe(saved, { input: { n: 5 } }).output).toBe(
