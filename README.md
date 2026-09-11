@@ -14,6 +14,10 @@
 </p>
 
 <p align="center">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/acoyfellow/pantry"><img alt="Deploy to Cloudflare" src="https://deploy.workers.cloudflare.com/button" /></a>
+</p>
+
+<p align="center">
   <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?logo=cloudflare&logoColor=white" />
   <img alt="Runtime" src="https://img.shields.io/badge/runtime-Bun-000?logo=bun&logoColor=white" />
   <img alt="Tests" src="https://img.shields.io/badge/tests-bun%20test-3fb950" />
@@ -81,7 +85,7 @@ The Worker fails closed. The Operations deployment is Access-only: `PANTRY_ACCES
 
 ## The API
 
-The public API instance lives at `https://pantry.coey.dev`; its machine-facing routes use `Authorization: Bearer <PANTRY_TOKEN>` and its only open route is `/health`. The Operations product lives separately at `https://pantry.ax.cloudflare.dev/manage/` and is protected at the Cloudflare Access edge. Its Worker is deployed with `PANTRY_ACCESS_ONLY=true`, so legacy `PANTRY_TOKEN` and `PANTRY_TOKENS` credentials are rejected even if presented to the Operations origin. Scoped credentials created through the Access-authenticated management flow remain available to machine clients. Configure the Access application to protect `/manage/*`, `/api/*`, `/recipes*`, and `/recipe/*`, then configure `PANTRY_ACCESS_PRINCIPALS`, `PANTRY_ACCESS_TEAMS`, and matching `team_members` rows for the authorized identities. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` target the public machine API.
+The public API instance lives at `https://pantry.coey.dev`; its machine-facing routes use `Authorization: Bearer <PANTRY_TOKEN>` and its only open route is `/health`. The Operations product lives separately on an Access-protected management origin. Its Worker is deployed with `PANTRY_ACCESS_ONLY=true`, so legacy `PANTRY_TOKEN` and `PANTRY_TOKENS` credentials are rejected even if presented to the Operations origin. Scoped credentials created through the Access-authenticated management flow remain available to machine clients. Configure the Access application to protect `/manage/*`, `/api/*`, `/recipes*`, and `/recipe/*`, then configure `PANTRY_ACCESS_PRINCIPALS`, `PANTRY_ACCESS_TEAMS`, and matching `team_members` rows for the authorized identities. Examples below assume `PANTRY_URL` and `PANTRY_TOKEN` target the public machine API.
 
 ### `GET /health`
 
