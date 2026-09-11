@@ -51,8 +51,10 @@ const REPO_ROOT = join(HERE, '..');
 type ClientModule = typeof import('../src/client.ts');
 type RunnerModule = typeof import('../examples/run-recipe.ts');
 
-const DEFAULT_URL = 'https://pantry.coey.dev';
+const DEFAULT_URL = 'https://pantry.ax.cloudflare.dev';
 const TOKEN_FILE = join(homedir(), '.terrarium', 'pantry-token.secret');
+const ACCESS_TOKEN_FILE = join(homedir(), '.terrarium', 'pantry-access.jwt');
+const URL_FILE = join(homedir(), '.terrarium', 'pantry-url');
 
 function loadToken(): string | undefined {
   const fromEnv = process.env.PANTRY_TOKEN?.trim();
@@ -65,8 +67,25 @@ function loadToken(): string | undefined {
   }
 }
 
+function loadAccessToken(): string | undefined {
+  const fromEnv = process.env.PANTRY_ACCESS_TOKEN?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const fromFile = readFileSync(ACCESS_TOKEN_FILE, 'utf8').trim();
+    return fromFile || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function resolvedUrl(): string {
-  return (process.env.PANTRY_URL?.trim() || DEFAULT_URL).replace(/\/$/, '');
+  const fromEnv = process.env.PANTRY_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  try {
+    const fromFile = readFileSync(URL_FILE, 'utf8').trim();
+    if (fromFile) return fromFile.replace(/\/$/, '');
+  } catch {}
+  return DEFAULT_URL.replace(/\/$/, '');
 }
 
 function pendingApprovalPath(name: string): string {
@@ -149,13 +168,21 @@ async function makeClient(): Promise<{
 }> {
   const url = resolvedUrl();
   const token = loadToken();
-  if (!token) {
+  const accessToken = url.includes('pantry.ax.cloudflare.dev') ? loadAccessToken() : undefined;
+  if (!token && !accessToken) {
     throw new Error(
-      `PANTRY_TOKEN is not set and ${TOKEN_FILE} is empty/unreadable. Set PANTRY_TOKEN or write the token file. (The token is never printed.)`,
+      `No Pantry credential is available. Set PANTRY_ACCESS_TOKEN or write ${ACCESS_TOKEN_FILE} for pantry.ax.cloudflare.dev; otherwise set PANTRY_TOKEN or write ${TOKEN_FILE}. (Credentials are never printed.)`,
     );
   }
   const { PantryClient } = (await import(join(REPO_ROOT, 'src', 'client.ts'))) as ClientModule;
-  const client = new PantryClient({ url, token, fetch: makeFetch() });
+  const client = new PantryClient({
+    url,
+    token,
+    authentication: accessToken
+      ? { kind: 'session', headers: () => ({ 'cf-access-token': accessToken }) }
+      : undefined,
+    fetch: makeFetch(),
+  });
   return { client, url };
 }
 

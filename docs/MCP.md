@@ -21,16 +21,18 @@ The server is the `mcp` subcommand of the pantry CLI:
 pantry mcp
 ```
 
-It reads two environment variables:
+`pantry mcp` does not make an employee authenticate with a bearer token. Employee access belongs in the Pantry deployment's browser management app, protected by its configured SSO provider.
+
+The `pantry login` command is the reserved CLI entry point for future browser session handoff. This package does not implement that handoff today: it does not open a browser, discover an identity provider, implement OAuth, or implement PKCE. It exits with an actionable message directing an employee to the deployment browser sign-in instead of asking them to create or paste `PANTRY_TOKEN`.
+
+## Configure an automation client
+
+MCP stdio hosts cannot use the future interactive browser handoff yet. They must be configured as non-interactive automation with an explicitly provisioned, scoped credential. The compatibility credential can be supplied through `PANTRY_TOKEN` or `~/.terrarium/pantry-token.secret`; it is never logged.
 
 - `PANTRY_URL` — defaults to `https://pantry.coey.dev`.
-- `PANTRY_TOKEN` — your bearer token. Read from the environment or `~/.terrarium/pantry-token.secret`. It is never logged.
+- `PANTRY_TOKEN` — explicit automation credential only, not employee SSO setup.
 
-## Configure a client
-
-The config is the same for any MCP client: launch `pantry mcp` and pass the two environment variables.
-
-Claude Desktop (`claude_desktop_config.json`):
+Claude Desktop (`claude_desktop_config.json`) machine configuration:
 
 ```json
 {
@@ -40,14 +42,14 @@ Claude Desktop (`claude_desktop_config.json`):
       "args": ["mcp"],
       "env": {
         "PANTRY_URL": "https://pantry.coey.dev",
-        "PANTRY_TOKEN": "your-token"
+        "PANTRY_TOKEN": "scoped-automation-credential"
       }
     }
   }
 }
 ```
 
-Cursor and other MCP clients use the same `command`, `args`, and `env`. From a checkout instead of an installed binary, use `"command": "bun"` with `"args": ["src/cli.ts", "mcp"]`.
+Cursor and other MCP clients use the same machine configuration. From a checkout instead of an installed binary, use `"command": "bun"` with `"args": ["src/cli.ts", "mcp"]`. Do not place an employee browser session or a long-lived production credential in a checked-in client configuration.
 
 ## Trust
 

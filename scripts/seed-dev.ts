@@ -60,18 +60,45 @@ const recipes: SeedRecipe[] = [
     lastRunHoursAgo: null,
   },
   {
-    name: 'mr_review_gate',
-    description: 'Gate checklist for reviewing a merge request by change surface.',
-    code: "return { gates: ['read-diff', 'threads', 'pipeline', 'wording'] };",
+    name: 'review_this_mr',
+    description:
+      'Audit one merge request for reviewer follow-up, author responses, and pipeline state.',
+    code: `const mr = ctx.input.mergeRequest || {};
+const reviewer = String(ctx.input.reviewer || '');
+const discussions = Array.isArray(mr.discussions) ? mr.discussions : [];
+const unresolvedDiscussions = discussions.filter((discussion) => !discussion.resolved);
+const myUnresolvedComments = unresolvedDiscussions.filter((discussion) =>
+  Array.isArray(discussion.notes) && discussion.notes.some((note) => note.author === reviewer),
+).length;
+const ownerReplied = unresolvedDiscussions.some((discussion) => {
+  const notes = Array.isArray(discussion.notes) ? discussion.notes : [];
+  const latestMine = notes.filter((note) => note.author === reviewer).at(-1);
+  const latestAuthor = notes.filter((note) => note.author === mr.author).at(-1);
+  return Boolean(latestMine && latestAuthor && latestAuthor.createdAt > latestMine.createdAt);
+});
+const reviewedByMe = discussions.some((discussion) =>
+  Array.isArray(discussion.notes) && discussion.notes.some((note) => note.author === reviewer),
+);
+const approvedByMe = Array.isArray(mr.approvedBy) && mr.approvedBy.includes(reviewer);
+const ownerActionNeeded = ownerReplied && myUnresolvedComments > 0;
+const nextAction = mr.draft
+  ? 'wait_for_ready'
+  : ownerActionNeeded
+    ? 'respond_to_author'
+    : myUnresolvedComments > 0
+      ? 'resolve_or_follow_up'
+      : approvedByMe
+        ? 'monitor_pipeline'
+        : 'review_needed';
+return { row: { ...mr, reviewedByMe, approvedByMe, myUnresolvedComments, ownerActionNeeded, ownerReplied, unresolvedDiscussions: unresolvedDiscussions.length, nextAction } };`,
     capabilities: ['workspace.none'],
-    status: 'pending',
-    runCount: 0,
-    lastRunHoursAgo: null,
+    status: 'enabled',
+    runCount: 8,
+    lastRunHoursAgo: 3,
   },
 ];
 
 const owner = 'agent-experience';
-const team = 'agent-experience';
 const identity = 'dev@localhost';
 
 function sqlString(value: string): string {
@@ -97,8 +124,6 @@ function recipeStatements(recipe: SeedRecipe, index: number): string[] {
 }
 
 const statements = [
-  `INSERT OR IGNORE INTO teams (id, name, created_at) VALUES (${sqlString(team)}, 'Agent Experience (dev)', ${sqlString(new Date().toISOString())});`,
-  `INSERT OR IGNORE INTO team_members (team_id, principal, role, created_at) VALUES (${sqlString(team)}, ${sqlString(owner)}, 'owner', ${sqlString(new Date().toISOString())});`,
   `DELETE FROM recipes WHERE owner = ${sqlString(owner)};`,
   ...recipes.flatMap(recipeStatements),
 ].join('\n');

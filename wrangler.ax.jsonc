@@ -6,7 +6,7 @@
   "compatibility_date": "2025-01-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  "workers_dev": false,
+  "workers_dev": true,
   "routes": [{ "pattern": "pantry.ax.cloudflare.dev", "custom_domain": true }],
   "assets": {
     "directory": "./app/dist/ops",
@@ -18,11 +18,16 @@
       "binding": "DB",
       "database_name": "pantry-db",
       "database_id": "e7c3ab28-b74d-4a0f-92c4-091ad855ccef",
-      "migrations_dir": "migrations"
+      "migrations_dir": "migrations",
+      "remote": true
     }
   ],
   "vars": {
-    "PANTRY_OWNER": "agent-experience",
-    "PANTRY_ACCESS_ONLY": "true"
+    "PANTRY_SHARED_OWNER": "jcoeyman@cloudflare.com",
+    "PANTRY_ACCESS_SHARE_ALL": "true",
+    "PANTRY_ACCESS_ONLY": "true",
+    "PANTRY_EMPLOYEE_WORKSPACE_ENABLED": "false",
+    "PANTRY_EMPLOYEE_WORKSPACE_SLUG": "cloudflare-employees",
+    "PANTRY_AUTHORIZATION_POLICY_VERSION": "employee-v1"
   }
 }

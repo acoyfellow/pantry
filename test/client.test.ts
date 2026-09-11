@@ -32,8 +32,31 @@ describe('PantryClient', () => {
     const client = new PantryClient({ ...config, fetch: fn });
     const recipes = await client.list();
     expect(recipes).toHaveLength(1);
+    expect(client.authenticationKind).toBe('automation-token');
     expect(calls[0].url).toBe('https://pantry.test/recipes');
     expect((calls[0].init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
+  });
+
+  test('session authentication supplies headers without requiring a bearer token', async () => {
+    const { fn, calls } = fakeFetch(() => Response.json({ recipes: [] }));
+    const client = new PantryClient({
+      url: 'https://pantry.test',
+      authentication: { kind: 'session', headers: () => ({ cookie: 'pantry-session=opaque' }) },
+      fetch: fn,
+    });
+    await client.list();
+    expect(client.authenticationKind).toBe('session');
+    expect((calls[0].init?.headers as Record<string, string>).cookie).toBe('pantry-session=opaque');
+    expect((calls[0].init?.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+
+  test('a configured URL without authentication rejects protected operations', async () => {
+    const client = new PantryClient({
+      url: 'https://pantry.test',
+      token: '',
+      fetch: (async () => new Response()) as unknown as typeof fetch,
+    });
+    await expect(client.get('x')).rejects.toThrow(/authentication is not configured/);
   });
 
   test('list supports exact tag filtering without changing auth behavior', async () => {

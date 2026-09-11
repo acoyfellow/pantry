@@ -1,13 +1,23 @@
 import { Hono } from 'hono';
 import {
   RecipeError,
+  type RecipeInput,
   type RecipeRow,
+  canonicalJson,
   fullRecipe,
   lintRecipeCode,
   listEntry,
   recipeSnapshotDigest,
   validateRecipeInput,
 } from './recipe.ts';
+import {
+  type HumanAuthorization,
+  type WorkspaceRole,
+  employeeWorkspaceEnabled,
+  hasFolderPermission,
+  hasWorkspaceRole,
+  resolveHumanAuthorization,
+} from './workspace-authorization.ts';
 
 export type Env = {
   DB: D1Database;
@@ -23,14 +33,18 @@ export type Env = {
   // ./app/dist for any path the API does not own. Optional so the API logic
   // and its tests run unchanged without an assets binding present.
   APP_ASSETS?: Fetcher;
-  PANTRY_ACCESS_PRINCIPALS?: string;
-  PANTRY_ACCESS_TEAMS?: string;
+  PANTRY_SHARED_OWNER?: string;
+  PANTRY_ACCESS_SHARE_ALL?: string;
   PANTRY_ACCESS_IDENTITY_HEADER?: string;
   PANTRY_ACCESS_ONLY?: string;
   // Local development only. When set, an unauthenticated request is treated as
   // this Access identity so the Operations UI can be exercised without an edge
   // session. It must never be configured on a deployed environment.
   PANTRY_DEV_ACCESS_IDENTITY?: string;
+  PANTRY_EMPLOYEE_WORKSPACE_ENABLED?: string;
+  PANTRY_EMPLOYEE_WORKSPACE_SLUG?: string;
+  PANTRY_LOCAL_DEVELOPMENT?: string;
+  PANTRY_AUTHORIZATION_POLICY_VERSION?: string;
 };
 
 // The API paths this Worker owns. Everything else falls through to the static
@@ -48,12 +62,10 @@ type AuthKind = 'access' | 'agent' | 'legacy';
 type Vars = {
   owner: string;
   accessIdentity?: string;
-  teamId?: string;
-  teamRole?: TeamRole;
   authKind?: AuthKind;
   agentScopes?: AgentScope[];
+  workspaceAuthorization?: HumanAuthorization;
 };
-type TeamRole = 'owner' | 'approver' | 'member';
 
 type AgentCredentialRow = {
   id: string;
@@ -94,83 +106,17 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function parseAccessPrincipals(raw: string | undefined): Map<string, string> | null {
-  if (!raw?.trim()) return null;
-  try {
-    const entries = Object.entries(JSON.parse(raw) as Record<string, unknown>).filter(
-      ([identity, principal]) =>
-        identity.trim() &&
-        identity.length <= 320 &&
-        typeof principal === 'string' &&
-        principal.trim() &&
-        principal.length <= 128,
-    );
-    return new Map(
-      entries.map(([identity, principal]) => [
-        identity.toLowerCase(),
-        (principal as string).toLowerCase(),
-      ]),
-    );
-  } catch {
-    return new Map();
-  }
+function sharedOwner(env: Env): string | null {
+  const owner = env.PANTRY_SHARED_OWNER?.trim().toLowerCase();
+  return owner && owner.length <= 128 ? owner : null;
 }
 
-function parseAccessTeams(raw: string | undefined): Map<string, string> | null {
-  if (!raw?.trim()) return null;
-  try {
-    const entries = Object.entries(JSON.parse(raw) as Record<string, unknown>).filter(
-      ([principal, teamId]) =>
-        principal.trim() &&
-        principal.length <= 128 &&
-        typeof teamId === 'string' &&
-        teamId.trim() &&
-        teamId.length <= 128,
-    );
-    return new Map(
-      entries.map(([principal, teamId]) => [
-        principal.toLowerCase(),
-        (teamId as string).toLowerCase(),
-      ]),
-    );
-  } catch {
-    return new Map();
-  }
-}
-
-type TeamMemberRow = {
-  team_id: string;
-  role: TeamRole;
-};
-
-async function requireAccessTeamMember(
-  c: {
-    env: Env;
-    get: <K extends keyof Vars>(key: K) => Vars[K];
-    set: <K extends keyof Vars>(key: K, value: Vars[K]) => void;
-    json: (object: unknown, status?: number) => Response;
-  },
-  accessRequired = false,
-): Promise<Response | TeamMemberRow | null> {
+function requireAccessIdentity(c: {
+  get: <K extends keyof Vars>(key: K) => Vars[K];
+  json: (object: unknown, status?: number) => Response;
+}): Response | string {
   const identity = c.get('accessIdentity');
-  if (!identity)
-    return accessRequired ? c.json({ error: 'Cloudflare Access session required' }, 401) : null;
-  const teams = parseAccessTeams(c.env.PANTRY_ACCESS_TEAMS);
-  if (!teams || teams.size === 0)
-    return c.json({ error: 'pantry Access team mapping is not configured' }, 503);
-  const teamId = teams.get(c.get('owner').toLowerCase());
-  if (!teamId) return c.json({ error: 'team membership required' }, 403);
-  const membership = await c.env.DB.prepare(
-    'SELECT team_id, role FROM team_members WHERE team_id = ? AND principal = ?',
-  )
-    .bind(teamId, c.get('owner'))
-    .first<TeamMemberRow>();
-  if (!membership || !['owner', 'approver', 'member'].includes(membership.role)) {
-    return c.json({ error: 'team membership required' }, 403);
-  }
-  c.set('teamId', membership.team_id);
-  c.set('teamRole', membership.role);
-  return membership;
+  return identity ? identity : c.json({ error: 'Cloudflare Access session required' }, 401);
 }
 
 function isSameOrigin(request: Request): boolean {
@@ -245,18 +191,28 @@ app.options('*', (c) => {
 app.get('/health', (c) => c.json({ ok: true, service: 'pantry' }));
 
 app.use('*', async (c, next) => {
-  const accessPrincipals = parseAccessPrincipals(c.env.PANTRY_ACCESS_PRINCIPALS);
+  const pathname = new URL(c.req.url).pathname;
+  const employeePath = pathname === '/api/session' || pathname.startsWith('/api/workspaces/');
+  if (employeeWorkspaceEnabled(c.env) && employeePath) {
+    if (!isSameOrigin(c.req.raw))
+      return c.json({ error: 'management requests must be same-origin' }, 403);
+    const resolved = await resolveHumanAuthorization(c.env.DB, c.env);
+    if ('error' in resolved)
+      return c.json({ error: resolved.error }, resolved.status as 401 | 403 | 503);
+    c.set('owner', resolved.authorization.workspace.id);
+    c.set('accessIdentity', resolved.authorization.actor.displayEmail ?? 'access-user');
+    c.set('authKind', 'access');
+    c.set('workspaceAuthorization', resolved.authorization);
+    await next();
+    return;
+  }
   const accessHeader =
     c.env.PANTRY_ACCESS_IDENTITY_HEADER?.trim() || 'cf-access-authenticated-user-email';
   const accessIdentity =
-    c.req.header(accessHeader)?.trim().toLowerCase() ||
-    c.env.PANTRY_DEV_ACCESS_IDENTITY?.trim().toLowerCase();
-  if (accessIdentity) {
-    if (!accessPrincipals || accessPrincipals.size === 0) {
-      return c.json({ error: 'pantry Access identity is not configured' }, 503);
-    }
-    const owner = accessPrincipals.get(accessIdentity);
-    if (!owner) return c.json({ error: 'unauthorized' }, 401);
+    c.req.header(accessHeader)?.trim() || c.env.PANTRY_DEV_ACCESS_IDENTITY?.trim();
+  if (c.env.PANTRY_ACCESS_SHARE_ALL === 'true' && accessIdentity) {
+    const owner = sharedOwner(c.env);
+    if (!owner) return c.json({ error: 'pantry shared owner is not configured' }, 503);
     if (!isSameOrigin(c.req.raw))
       return c.json({ error: 'management requests must be same-origin' }, 403);
     c.set('owner', owner);
@@ -283,7 +239,6 @@ app.use('*', async (c, next) => {
       }
       if (!scopes) return c.json({ error: 'invalid agent credential scopes' }, 403);
       c.set('owner', credential.owner_principal);
-      c.set('teamId', credential.team_id);
       c.set('authKind', 'agent');
       c.set('agentScopes', scopes);
       await next();
@@ -307,7 +262,7 @@ app.use('*', async (c, next) => {
     owner = (c.env.PANTRY_OWNER ?? 'default').toLowerCase();
   }
   if (owner === null) {
-    if (!single && !multi && !accessPrincipals)
+    if (!single && !multi)
       return c.json(
         { error: 'pantry is not configured: agent credentials or explicit legacy tokens required' },
         503,
@@ -331,6 +286,26 @@ app.use('*', async (c, next) => {
   }
   await next();
 });
+
+function workspaceAuthorization(c: {
+  get: <K extends keyof Vars>(key: K) => Vars[K];
+  json: (object: unknown, status?: number) => Response;
+}): HumanAuthorization | Response {
+  const authorization = c.get('workspaceAuthorization');
+  return authorization ?? c.json({ error: 'employee workspace authorization required' }, 403);
+}
+
+function workspaceSlugMatches(
+  c: {
+    req: { param: (name: string) => string };
+    json: (object: unknown, status?: number) => Response;
+  },
+  authorization: HumanAuthorization,
+): Response | null {
+  return c.req.param('workspaceSlug') === authorization.workspace.slug
+    ? null
+    : c.json({ error: 'workspace does not match authenticated session' }, 403);
+}
 
 function handleError(error: unknown): Response {
   if (error instanceof RecipeError) {
@@ -377,6 +352,50 @@ type RecipeAttestationRow = {
   created_at: string;
 };
 
+type WorkspaceRecipeRow = RecipeRow & {
+  workspace_id: string;
+  folder_id: string;
+  created_by_actor_id: string;
+  updated_by_actor_id: string;
+  legacy_owner: string;
+  workspace_recipe_key: string;
+  archived_at: string | null;
+};
+
+type WorkspaceRecipeVersionRow = {
+  recipe_digest: string;
+  description: string;
+  input_schema_json: string;
+  code: string;
+  capabilities_json: string;
+  source_run_id: string | null;
+  visibility: 'private' | 'shared';
+  tags_json: string;
+  created_at: string;
+};
+
+type ActorDisplayRow = {
+  id: string;
+  kind: 'human' | 'agent' | 'system';
+  display_email_normalized: string | null;
+};
+
+type AuditEventRow = {
+  event_id: string;
+  occurred_at: string;
+  request_id: string;
+  action: string;
+  outcome: 'allowed' | 'denied' | 'failed';
+  folder_id: string | null;
+  recipe_id: string | null;
+  recipe_version: number | null;
+  recipe_digest: string | null;
+  actor_id: string | null;
+  actor_kind: 'human' | 'agent' | 'system' | null;
+  reason_code: string;
+  metadata_json: string;
+};
+
 const PUSH_RETRY_ATTEMPTS = 4;
 
 async function persistRecipe(
@@ -395,7 +414,7 @@ async function persistRecipe(
     const version = (existing?.version ?? 0) + 1;
     const recipeDigest = await recipeSnapshotDigest(owner, recipe, version);
     const capabilitiesJson = JSON.stringify(recipe.capabilities);
-    const status = 'pending';
+    const status = recipe.status;
     const [current, history] = await db.batch([
       db
         .prepare(
@@ -412,10 +431,10 @@ async function persistRecipe(
              visibility = excluded.visibility,
              tags_json = excluded.tags_json,
              recipe_digest = excluded.recipe_digest,
-             approved_version = CASE WHEN excluded.status = 'pending' THEN NULL ELSE recipes.approved_version END,
-             approved_digest = CASE WHEN excluded.status = 'pending' THEN NULL ELSE recipes.approved_digest END,
-             reviewed_version = CASE WHEN excluded.status = 'pending' THEN NULL ELSE recipes.reviewed_version END,
-             reviewed_digest = CASE WHEN excluded.status = 'pending' THEN NULL ELSE recipes.reviewed_digest END,
+             approved_version = NULL,
+             approved_digest = NULL,
+             reviewed_version = NULL,
+             reviewed_digest = NULL,
              updated_at = excluded.updated_at
            WHERE recipes.version = ?`,
         )
@@ -673,23 +692,49 @@ function approvalEntry(row: ApprovalRow) {
   };
 }
 
-async function requireCredentialManager(c: {
-  env: Env;
-  get: <K extends keyof Vars>(key: K) => Vars[K];
-  set: <K extends keyof Vars>(key: K, value: Vars[K]) => void;
-  json: (object: unknown, status?: number) => Response;
-}): Promise<Response | TeamMemberRow> {
-  const membership = await requireAccessTeamMember(c, true);
-  if (membership instanceof Response) return membership;
-  if (!membership || (membership.role !== 'owner' && membership.role !== 'approver')) {
-    return c.json({ error: 'team approver or owner role required' }, 403);
-  }
-  return membership;
+type WorkspaceAuditDetails = {
+  folderId?: string | null;
+  recipe?: Pick<WorkspaceRecipeRow, 'id' | 'version' | 'recipe_digest'>;
+  metadata?: Record<string, string | number | boolean | null>;
+};
+
+async function recordWorkspaceAudit(
+  db: D1Database,
+  authorization: HumanAuthorization,
+  action: string,
+  details: WorkspaceAuditDetails | string | null = null,
+): Promise<void> {
+  const normalized =
+    typeof details === 'string'
+      ? { folderId: details }
+      : (details ?? ({} as WorkspaceAuditDetails));
+  const now = new Date().toISOString();
+  const metadataJson = canonicalJson(normalized.metadata ?? {});
+  await db
+    .prepare(
+      "INSERT INTO audit_events (event_id, occurred_at, request_id, action, outcome, workspace_id, folder_id, recipe_id, recipe_version, recipe_digest, actor_id, actor_kind, access_subject_snapshot, authorization_policy_version, reason_code, metadata_digest, metadata_json) VALUES (?, ?, ?, ?, 'allowed', ?, ?, ?, ?, ?, ?, 'human', ?, ?, 'authorized', ?, ?)",
+    )
+    .bind(
+      crypto.randomUUID(),
+      now,
+      crypto.randomUUID(),
+      action,
+      authorization.workspace.id,
+      normalized.folderId ?? null,
+      normalized.recipe?.id ?? null,
+      normalized.recipe?.version ?? null,
+      normalized.recipe?.recipe_digest ?? null,
+      authorization.actor.id,
+      authorization.accessSubject,
+      'employee-v1',
+      await sha256(metadataJson),
+      metadataJson,
+    )
+    .run();
 }
 
 async function createAgentCredential(
   db: D1Database,
-  teamId: string,
   owner: string,
   principal: string,
   scopes: AgentScope[],
@@ -702,20 +747,661 @@ async function createAgentCredential(
     .prepare(
       'INSERT INTO agent_identities (id, team_id, principal, owner_principal, created_at, revoked_at) VALUES (?, ?, ?, ?, ?, NULL)',
     )
-    .bind(identityId, teamId, principal, owner, now)
+    .bind(identityId, owner, principal, owner, now)
     .run();
   await db
     .prepare(
       'INSERT INTO agent_credentials (id, agent_identity_id, team_id, credential_hash, scopes_json, created_at, revoked_at, rotated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)',
     )
-    .bind(credentialId, identityId, teamId, await sha256(credential), JSON.stringify(scopes), now)
+    .bind(credentialId, identityId, owner, await sha256(credential), JSON.stringify(scopes), now)
     .run();
   return { id: credentialId, credential, createdAt: now };
 }
 
+function workspaceRecipeOwner(workspaceId: string): string {
+  return `workspace:${workspaceId}`;
+}
+
+function workspaceRecipeEntry(
+  recipe: WorkspaceRecipeRow,
+  folder: { id: string; slug: string; display_name: string } | null,
+  createdBy: ActorDisplayRow | null,
+  updatedBy: ActorDisplayRow | null,
+) {
+  return {
+    recipeKey: recipe.workspace_recipe_key,
+    description: recipe.description,
+    inputSchema: JSON.parse(recipe.input_schema_json) as Record<string, unknown>,
+    capabilities: JSON.parse(recipe.capabilities_json) as string[],
+    status: recipe.status,
+    version: recipe.version,
+    recipeDigest: recipe.recipe_digest,
+    folder: folder ? { id: folder.id, slug: folder.slug, displayName: folder.display_name } : null,
+    createdBy: createdBy
+      ? { id: createdBy.id, kind: createdBy.kind, displayEmail: createdBy.display_email_normalized }
+      : null,
+    updatedBy: updatedBy
+      ? { id: updatedBy.id, kind: updatedBy.kind, displayEmail: updatedBy.display_email_normalized }
+      : null,
+    createdAt: recipe.created_at,
+    updatedAt: recipe.updated_at,
+  };
+}
+
+async function workspaceRecipeActors(
+  db: D1Database,
+  recipe: WorkspaceRecipeRow,
+): Promise<{ createdBy: ActorDisplayRow | null; updatedBy: ActorDisplayRow | null }> {
+  const [createdBy, updatedBy] = await Promise.all([
+    db
+      .prepare('SELECT id, kind, display_email_normalized FROM actors WHERE id = ?')
+      .bind(recipe.created_by_actor_id)
+      .first<ActorDisplayRow>(),
+    db
+      .prepare('SELECT id, kind, display_email_normalized FROM actors WHERE id = ?')
+      .bind(recipe.updated_by_actor_id)
+      .first<ActorDisplayRow>(),
+  ]);
+  return { createdBy, updatedBy };
+}
+
+async function workspaceRecipeFolder(
+  db: D1Database,
+  folderId: string,
+): Promise<{ id: string; slug: string; display_name: string } | null> {
+  return db
+    .prepare('SELECT id, slug, display_name FROM folders WHERE id = ? AND archived_at IS NULL')
+    .bind(folderId)
+    .first<{ id: string; slug: string; display_name: string }>();
+}
+
+async function workspaceRecipeByKey(
+  db: D1Database,
+  workspaceId: string,
+  recipeKey: string,
+): Promise<WorkspaceRecipeRow | null> {
+  return db
+    .prepare(
+      'SELECT * FROM recipes WHERE workspace_id = ? AND workspace_recipe_key = ? AND archived_at IS NULL',
+    )
+    .bind(workspaceId, recipeKey)
+    .first<WorkspaceRecipeRow>();
+}
+
+async function persistWorkspaceRecipe(
+  db: D1Database,
+  authorization: HumanAuthorization,
+  folderId: string,
+  recipe: RecipeInput,
+  existing: WorkspaceRecipeRow | null,
+): Promise<{ created: boolean; recipe: WorkspaceRecipeRow }> {
+  const owner = workspaceRecipeOwner(authorization.workspace.id);
+  const now = new Date().toISOString();
+  const version = (existing?.version ?? 0) + 1;
+  const pendingRecipe = { ...recipe, status: 'pending' as const };
+  const recipeDigest = await recipeSnapshotDigest(owner, pendingRecipe, version);
+  const [current, history] = await db.batch([
+    db
+      .prepare(
+        `INSERT INTO recipes (id, owner, name, description, input_schema_json, code, capabilities_json, status, version, source_run_id, visibility, tags_json, run_count, last_run_at, recipe_digest, created_at, updated_at, workspace_id, folder_id, created_by_actor_id, updated_by_actor_id, legacy_owner, workspace_recipe_key, archived_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+         ON CONFLICT(owner, name) DO UPDATE SET
+           description = excluded.description,
+           input_schema_json = excluded.input_schema_json,
+           code = excluded.code,
+           capabilities_json = excluded.capabilities_json,
+           status = 'pending',
+           version = excluded.version,
+           source_run_id = excluded.source_run_id,
+           visibility = excluded.visibility,
+           tags_json = excluded.tags_json,
+           recipe_digest = excluded.recipe_digest,
+           approved_version = NULL,
+           approved_digest = NULL,
+           reviewed_version = NULL,
+           reviewed_digest = NULL,
+           updated_by_actor_id = excluded.updated_by_actor_id,
+           updated_at = excluded.updated_at
+         WHERE recipes.version = ?`,
+      )
+      .bind(
+        existing?.id ?? crypto.randomUUID(),
+        owner,
+        recipe.name,
+        recipe.description,
+        JSON.stringify(recipe.inputSchema),
+        recipe.code,
+        JSON.stringify(recipe.capabilities),
+        version,
+        recipe.sourceRunId,
+        recipe.visibility,
+        JSON.stringify(recipe.tags ?? []),
+        recipeDigest,
+        existing?.created_at ?? now,
+        now,
+        authorization.workspace.id,
+        folderId,
+        existing?.created_by_actor_id ?? authorization.actor.id,
+        authorization.actor.id,
+        existing?.legacy_owner ?? owner,
+        recipe.name,
+        existing?.version ?? 0,
+      ),
+    db
+      .prepare(
+        `INSERT INTO recipe_versions (owner, recipe_name, recipe_version, recipe_digest, description, input_schema_json, code, capabilities_json, source_run_id, visibility, tags_json, created_at)
+         SELECT owner, name, version, recipe_digest, description, input_schema_json, code, capabilities_json, source_run_id, visibility, tags_json, ?
+         FROM recipes
+         WHERE owner = ? AND name = ? AND version = ? AND recipe_digest = ?`,
+      )
+      .bind(now, owner, recipe.name, version, recipeDigest),
+  ]);
+  if ((current.meta?.changes ?? 0) !== 1 || (history.meta?.changes ?? 0) !== 1)
+    throw new RecipeError('Conflict', 'recipe changed concurrently; retry the request');
+  const persisted = await workspaceRecipeByKey(db, authorization.workspace.id, recipe.name);
+  if (!persisted) throw new RecipeError('Conflict', 'workspace recipe was not persisted');
+  return { created: !existing, recipe: persisted };
+}
+
+app.get('/api/workspaces/:workspaceSlug/recipes', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  const folderId = c.req.query('folder')?.trim();
+  if (folderId && !(await hasFolderPermission(c.env.DB, authorization, folderId, 'read')))
+    return c.json({ error: 'folder read permission required' }, 403);
+  const query = c.req.query('q')?.trim().toLowerCase();
+  const statement = folderId
+    ? c.env.DB.prepare(
+        'SELECT * FROM recipes WHERE workspace_id = ? AND folder_id = ? AND archived_at IS NULL ORDER BY updated_at DESC',
+      ).bind(authorization.workspace.id, folderId)
+    : c.env.DB.prepare(
+        'SELECT * FROM recipes WHERE workspace_id = ? AND archived_at IS NULL ORDER BY updated_at DESC',
+      ).bind(authorization.workspace.id);
+  const { results = [] } = await statement.all<WorkspaceRecipeRow>();
+  const visible = (
+    await Promise.all(
+      results.map(async (recipe) => {
+        if (!(await hasFolderPermission(c.env.DB, authorization, recipe.folder_id, 'read')))
+          return null;
+        if (
+          query &&
+          !recipe.workspace_recipe_key.toLowerCase().includes(query) &&
+          !recipe.description.toLowerCase().includes(query)
+        )
+          return null;
+        const [folder, actors] = await Promise.all([
+          workspaceRecipeFolder(c.env.DB, recipe.folder_id),
+          workspaceRecipeActors(c.env.DB, recipe),
+        ]);
+        if (!folder) return null;
+        return workspaceRecipeEntry(recipe, folder, actors.createdBy, actors.updatedBy);
+      }),
+    )
+  ).filter((recipe) => recipe !== null);
+  return c.json({ recipes: visible });
+});
+
+app.post('/api/workspaces/:workspaceSlug/recipes', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'contributor'))
+    return c.json({ error: 'workspace contributor role required' }, 403);
+  try {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    const folderId = typeof body?.folderId === 'string' ? body.folderId : '';
+    if (!folderId || !(await hasFolderPermission(c.env.DB, authorization, folderId, 'write')))
+      return c.json({ error: 'folder write permission required' }, 403);
+    const recipe = validateRecipeInput(body?.recipe ?? body);
+    if (await workspaceRecipeByKey(c.env.DB, authorization.workspace.id, recipe.name))
+      return c.json({ error: 'workspace recipe key already exists' }, 409);
+    const saved = await persistWorkspaceRecipe(c.env.DB, authorization, folderId, recipe, null);
+    await recordWorkspaceAudit(c.env.DB, authorization, 'recipe.created', {
+      folderId,
+      recipe: saved.recipe,
+      metadata: { recipeKey: saved.recipe.workspace_recipe_key },
+    });
+    const [folder, actors] = await Promise.all([
+      workspaceRecipeFolder(c.env.DB, folderId),
+      workspaceRecipeActors(c.env.DB, saved.recipe),
+    ]);
+    return c.json(
+      { recipe: workspaceRecipeEntry(saved.recipe, folder, actors.createdBy, actors.updatedBy) },
+      201,
+    );
+  } catch (error) {
+    return handleError(error);
+  }
+});
+
+app.post('/api/workspaces/:workspaceSlug/recipes/:recipeKey/revisions', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  try {
+    const existing = await workspaceRecipeByKey(
+      c.env.DB,
+      authorization.workspace.id,
+      c.req.param('recipeKey'),
+    );
+    if (!existing) return handleError(new RecipeError('NotFound', 'workspace recipe not found'));
+    if (!(await hasFolderPermission(c.env.DB, authorization, existing.folder_id, 'write')))
+      return c.json({ error: 'folder write permission required' }, 403);
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    const recipe = validateRecipeInput(body?.recipe ?? body);
+    if (recipe.name !== existing.workspace_recipe_key)
+      return c.json({ error: 'recipe name must match recipe key' }, 400);
+    const saved = await persistWorkspaceRecipe(
+      c.env.DB,
+      authorization,
+      existing.folder_id,
+      recipe,
+      existing,
+    );
+    await recordWorkspaceAudit(c.env.DB, authorization, 'recipe.revised', {
+      folderId: existing.folder_id,
+      recipe: saved.recipe,
+      metadata: { recipeKey: saved.recipe.workspace_recipe_key },
+    });
+    return c.json({
+      recipeKey: saved.recipe.workspace_recipe_key,
+      version: saved.recipe.version,
+      recipeDigest: saved.recipe.recipe_digest,
+      status: saved.recipe.status,
+    });
+  } catch (error) {
+    return handleError(error);
+  }
+});
+
+app.post(
+  '/api/workspaces/:workspaceSlug/recipes/:recipeKey/versions/:version/reviews',
+  async (c) => {
+    const authorization = workspaceAuthorization(c);
+    if (authorization instanceof Response) return authorization;
+    const mismatch = workspaceSlugMatches(c, authorization);
+    if (mismatch) return mismatch;
+    if (!hasWorkspaceRole(authorization.role, 'reviewer'))
+      return c.json({ error: 'workspace reviewer role required' }, 403);
+    const version = Number(c.req.param('version'));
+    if (!Number.isInteger(version) || version < 1)
+      return c.json({ error: 'a positive pinned version is required' }, 400);
+    try {
+      const recipe = await workspaceRecipeByKey(
+        c.env.DB,
+        authorization.workspace.id,
+        c.req.param('recipeKey'),
+      );
+      if (!recipe) return handleError(new RecipeError('NotFound', 'workspace recipe not found'));
+      if (!(await hasFolderPermission(c.env.DB, authorization, recipe.folder_id, 'review')))
+        return c.json({ error: 'folder review permission required' }, 403);
+      const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      const action = typeof body?.action === 'string' ? body.action : '';
+      const expectedDigest = typeof body?.recipeDigest === 'string' ? body.recipeDigest : '';
+      const reason = typeof body?.reason === 'string' ? body.reason.trim() : null;
+      if (!['approve', 'reject', 'request-revision'].includes(action))
+        return c.json({ error: 'invalid review action' }, 400);
+      if (!expectedDigest || (reason && reason.length > 1000))
+        return c.json({ error: 'recipeDigest and a valid optional reason are required' }, 400);
+      if (
+        recipe.version !== version ||
+        recipe.recipe_digest !== expectedDigest ||
+        recipe.status !== 'pending'
+      )
+        return handleError(new RecipeError('Conflict', 'review subject is stale or not pending'));
+      const inputSchemaDigest = await sha256(canonicalJson(JSON.parse(recipe.input_schema_json)));
+      const capabilitiesDigest = await sha256(canonicalJson(JSON.parse(recipe.capabilities_json)));
+      const distributionDigest = await sha256(
+        canonicalJson({
+          workspaceId: authorization.workspace.id,
+          folderId: recipe.folder_id,
+          policyVersion: 'employee-v1',
+        }),
+      );
+      const createdAt = new Date().toISOString();
+      const receiptDigest = await sha256(
+        canonicalJson({
+          workspaceId: authorization.workspace.id,
+          recipeId: recipe.id,
+          version,
+          recipeDigest: recipe.recipe_digest,
+          inputSchemaDigest,
+          capabilitiesDigest,
+          distributionDigest,
+          action,
+          reason,
+          actorId: authorization.actor.id,
+          createdAt,
+        }),
+      );
+      const nextStatus =
+        action === 'approve' ? 'enabled' : action === 'reject' ? 'rejected' : 'pending';
+      const [review, updated] = await c.env.DB.batch([
+        c.env.DB.prepare(
+          `INSERT INTO recipe_release_reviews (id, workspace_id, recipe_id, recipe_version, recipe_digest, input_schema_digest, capabilities_digest, distribution_digest, action, reason, actor_id, access_subject_snapshot, created_at, receipt_digest)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         WHERE NOT EXISTS (
+           SELECT 1 FROM recipe_release_reviews
+           WHERE recipe_id = ? AND recipe_version = ? AND recipe_digest = ? AND distribution_digest = ?
+             AND action IN ('approve', 'reject')
+         )`,
+        ).bind(
+          crypto.randomUUID(),
+          authorization.workspace.id,
+          recipe.id,
+          version,
+          recipe.recipe_digest,
+          inputSchemaDigest,
+          capabilitiesDigest,
+          distributionDigest,
+          action,
+          reason,
+          authorization.actor.id,
+          authorization.accessSubject,
+          createdAt,
+          receiptDigest,
+          recipe.id,
+          version,
+          recipe.recipe_digest,
+          distributionDigest,
+        ),
+        c.env.DB.prepare(
+          `UPDATE recipes
+         SET status = ?, approved_version = ?, approved_digest = ?, reviewed_version = ?, reviewed_digest = ?
+         WHERE id = ? AND workspace_id = ? AND version = ? AND recipe_digest = ? AND status = 'pending'`,
+        ).bind(
+          nextStatus,
+          action === 'approve' ? version : null,
+          action === 'approve' ? recipe.recipe_digest : null,
+          version,
+          recipe.recipe_digest,
+          recipe.id,
+          authorization.workspace.id,
+          version,
+          recipe.recipe_digest,
+        ),
+      ]);
+      if ((review.meta?.changes ?? 0) !== 1 || (updated.meta?.changes ?? 0) !== 1)
+        return handleError(
+          new RecipeError('Conflict', 'review subject changed before the decision'),
+        );
+      await recordWorkspaceAudit(c.env.DB, authorization, 'recipe.reviewed', {
+        folderId: recipe.folder_id,
+        recipe,
+        metadata: { action, version },
+      });
+      return c.json({ action, version, recipeDigest: recipe.recipe_digest, receiptDigest });
+    } catch (error) {
+      return handleError(error);
+    }
+  },
+);
+
+app.get('/api/workspaces/:workspaceSlug/recipes/:recipeKey/versions/:version/source', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  const version = Number(c.req.param('version'));
+  if (!Number.isInteger(version) || version < 1)
+    return c.json({ error: 'a positive pinned version is required' }, 400);
+  const recipe = await workspaceRecipeByKey(
+    c.env.DB,
+    authorization.workspace.id,
+    c.req.param('recipeKey'),
+  );
+  if (!recipe) return handleError(new RecipeError('NotFound', 'workspace recipe not found'));
+  if (!(await hasFolderPermission(c.env.DB, authorization, recipe.folder_id, 'read')))
+    return c.json({ error: 'folder read permission required' }, 403);
+  const snapshot = await c.env.DB.prepare(
+    'SELECT recipe_digest, description, input_schema_json, code, capabilities_json, source_run_id, visibility, tags_json, created_at FROM recipe_versions WHERE owner = ? AND recipe_name = ? AND recipe_version = ?',
+  )
+    .bind(recipe.owner, recipe.name, version)
+    .first<WorkspaceRecipeVersionRow>();
+  if (!snapshot) return handleError(new RecipeError('NotFound', 'recipe version not found'));
+  const approved = await c.env.DB.prepare(
+    "SELECT id FROM recipe_release_reviews WHERE workspace_id = ? AND recipe_id = ? AND recipe_version = ? AND recipe_digest = ? AND action = 'approve' LIMIT 1",
+  )
+    .bind(authorization.workspace.id, recipe.id, version, snapshot.recipe_digest)
+    .first<{ id: string }>();
+  if (!approved) return handleError(new RecipeError('Conflict', 'recipe version is not approved'));
+  const createdBy = await c.env.DB.prepare(
+    'SELECT id, kind, display_email_normalized FROM actors WHERE id = ?',
+  )
+    .bind(recipe.created_by_actor_id)
+    .first<ActorDisplayRow>();
+  await recordWorkspaceAudit(c.env.DB, authorization, 'recipe.retrieved', {
+    folderId: recipe.folder_id,
+    recipe: { ...recipe, version, recipe_digest: snapshot.recipe_digest },
+    metadata: { recipeKey: recipe.workspace_recipe_key, pinned: true },
+  });
+  return c.json({
+    recipeKey: recipe.workspace_recipe_key,
+    version,
+    recipeDigest: snapshot.recipe_digest,
+    description: snapshot.description,
+    inputSchema: JSON.parse(snapshot.input_schema_json) as Record<string, unknown>,
+    capabilities: JSON.parse(snapshot.capabilities_json) as string[],
+    code: snapshot.code,
+    sourceRunId: snapshot.source_run_id,
+    legacyOwner: recipe.legacy_owner,
+    createdBy: createdBy
+      ? { id: createdBy.id, kind: createdBy.kind, displayEmail: createdBy.display_email_normalized }
+      : null,
+  });
+});
+
+app.get('/api/workspaces/:workspaceSlug/audit-events', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'admin'))
+    return c.json({ error: 'workspace admin required' }, 403);
+  const { results = [] } = await c.env.DB.prepare(
+    'SELECT event_id, occurred_at, request_id, action, outcome, folder_id, recipe_id, recipe_version, recipe_digest, actor_id, actor_kind, reason_code, metadata_json FROM audit_events WHERE workspace_id = ? ORDER BY occurred_at DESC LIMIT 100',
+  )
+    .bind(authorization.workspace.id)
+    .all<AuditEventRow>();
+  return c.json({
+    events: results.map((event) => ({
+      id: event.event_id,
+      occurredAt: event.occurred_at,
+      requestId: event.request_id,
+      action: event.action,
+      outcome: event.outcome,
+      folderId: event.folder_id,
+      recipeId: event.recipe_id,
+      recipeVersion: event.recipe_version,
+      recipeDigest: event.recipe_digest,
+      actorId: event.actor_id,
+      actorKind: event.actor_kind,
+      reasonCode: event.reason_code,
+      metadata: JSON.parse(event.metadata_json),
+    })),
+  });
+});
+
+app.get('/api/workspaces/:workspaceSlug/memberships', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'admin'))
+    return c.json({ error: 'workspace admin required' }, 403);
+  const rows = await c.env.DB.prepare(
+    'SELECT id, actor_id, role, source, valid_from, valid_until, revoked_at FROM workspace_memberships WHERE workspace_id = ? ORDER BY created_at DESC',
+  )
+    .bind(authorization.workspace.id)
+    .all<Record<string, unknown>>();
+  return c.json({ memberships: rows.results ?? [] });
+});
+
+app.post('/api/workspaces/:workspaceSlug/memberships', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'admin'))
+    return c.json({ error: 'workspace admin required' }, 403);
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const actorId = typeof body?.actorId === 'string' ? body.actorId : '';
+  const role = body?.role;
+  if (!actorId || !['contributor', 'reviewer', 'admin'].includes(String(role))) {
+    return c.json({ error: 'actorId and an elevated role are required' }, 400);
+  }
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const inserted = await c.env.DB.prepare(
+    "INSERT INTO workspace_memberships (id, workspace_id, actor_id, role, source, valid_from, created_at, created_by_actor_id) VALUES (?, ?, ?, ?, 'admin-grant', ?, ?, ?)",
+  )
+    .bind(id, authorization.workspace.id, actorId, role, now, now, authorization.actor.id)
+    .run();
+  if ((inserted.meta?.changes ?? 0) !== 1)
+    return c.json({ error: 'membership could not be granted' }, 409);
+  await recordWorkspaceAudit(c.env.DB, authorization, 'membership.granted');
+  return c.json({ id, actorId, role }, 201);
+});
+
+app.get('/api/workspaces/:workspaceSlug/folders', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  const rows = await c.env.DB.prepare(
+    'SELECT id, parent_id, slug, display_name, archived_at FROM folders WHERE workspace_id = ? AND archived_at IS NULL ORDER BY slug',
+  )
+    .bind(authorization.workspace.id)
+    .all<Record<string, unknown>>();
+  return c.json({ folders: rows.results ?? [] });
+});
+
+app.post('/api/workspaces/:workspaceSlug/folders', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'admin'))
+    return c.json({ error: 'workspace admin required' }, 403);
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const slug = typeof body?.slug === 'string' ? body.slug.trim().toLowerCase() : '';
+  const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
+  const parentId = typeof body?.parentId === 'string' ? body.parentId : null;
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(slug) || !displayName || displayName.length > 128) {
+    return c.json({ error: 'valid folder slug and displayName are required' }, 400);
+  }
+  if (parentId && !(await hasFolderPermission(c.env.DB, authorization, parentId, 'admin'))) {
+    return c.json({ error: 'parent folder admin permission required' }, 403);
+  }
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const inserted = await c.env.DB.prepare(
+    'INSERT INTO folders (id, workspace_id, parent_id, slug, display_name, created_by_actor_id, updated_by_actor_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+    .bind(
+      id,
+      authorization.workspace.id,
+      parentId,
+      slug,
+      displayName,
+      authorization.actor.id,
+      authorization.actor.id,
+      now,
+      now,
+    )
+    .run();
+  if ((inserted.meta?.changes ?? 0) !== 1)
+    return c.json({ error: 'folder could not be created' }, 409);
+  await recordWorkspaceAudit(c.env.DB, authorization, 'folder.created', id);
+  return c.json({ id, slug, displayName, parentId }, 201);
+});
+
+app.post('/api/workspaces/:workspaceSlug/invitations', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  if (!hasWorkspaceRole(authorization.role, 'admin'))
+    return c.json({ error: 'workspace admin required' }, 403);
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const targetAccessSubject =
+    typeof body?.targetAccessSubject === 'string' ? body.targetAccessSubject.trim() : '';
+  const role = body?.role;
+  if (!targetAccessSubject || !['contributor', 'reviewer', 'admin'].includes(String(role))) {
+    return c.json({ error: 'targetAccessSubject and an elevated role are required' }, 400);
+  }
+  const id = crypto.randomUUID();
+  const token = crypto.randomUUID() + crypto.randomUUID();
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const inserted = await c.env.DB.prepare(
+    "INSERT INTO workspace_invitations (id, workspace_id, target_access_subject, display_email_normalized, role, status, token_verifier, expires_at, created_at, created_by_actor_id) VALUES (?, ?, ?, NULL, ?, 'pending', ?, ?, ?, ?)",
+  )
+    .bind(
+      id,
+      authorization.workspace.id,
+      targetAccessSubject,
+      role,
+      await sha256(token),
+      expiresAt,
+      now,
+      authorization.actor.id,
+    )
+    .run();
+  if ((inserted.meta?.changes ?? 0) !== 1)
+    return c.json({ error: 'invitation could not be created' }, 409);
+  await recordWorkspaceAudit(c.env.DB, authorization, 'invitation.created');
+  return c.json({ id, role, expiresAt, token }, 201);
+});
+
+app.post('/api/workspaces/:workspaceSlug/invitations/:id/accept', async (c) => {
+  const authorization = workspaceAuthorization(c);
+  if (authorization instanceof Response) return authorization;
+  const mismatch = workspaceSlugMatches(c, authorization);
+  if (mismatch) return mismatch;
+  const invitation = await c.env.DB.prepare(
+    "SELECT id, role FROM workspace_invitations WHERE id = ? AND workspace_id = ? AND target_access_subject = ? AND status = 'pending' AND expires_at > ?",
+  )
+    .bind(
+      c.req.param('id'),
+      authorization.workspace.id,
+      authorization.accessSubject,
+      new Date().toISOString(),
+    )
+    .first<{ id: string; role: WorkspaceRole }>();
+  if (!invitation)
+    return c.json({ error: 'invitation is not available to this Access subject' }, 403);
+  const now = new Date().toISOString();
+  const membershipId = crypto.randomUUID();
+  const [membership, accepted] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      "INSERT INTO workspace_memberships (id, workspace_id, actor_id, role, source, valid_from, created_at, created_by_actor_id) VALUES (?, ?, ?, ?, 'admin-grant', ?, ?, ?)",
+    ).bind(
+      membershipId,
+      authorization.workspace.id,
+      authorization.actor.id,
+      invitation.role,
+      now,
+      now,
+      authorization.actor.id,
+    ),
+    c.env.DB.prepare(
+      "UPDATE workspace_invitations SET status = 'accepted', accepted_at = ?, accepted_by_actor_id = ? WHERE id = ? AND status = 'pending'",
+    ).bind(now, authorization.actor.id, invitation.id),
+  ]);
+  if ((membership.meta?.changes ?? 0) !== 1 || (accepted.meta?.changes ?? 0) !== 1)
+    return c.json({ error: 'invitation acceptance conflicted' }, 409);
+  await recordWorkspaceAudit(c.env.DB, authorization, 'invitation.accepted');
+  return c.json({ accepted: true, role: invitation.role });
+});
+
 app.post('/api/agent-credentials', async (c) => {
-  const manager = await requireCredentialManager(c);
-  if (manager instanceof Response) return manager;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
   const principal = typeof body?.principal === 'string' ? body.principal.trim().toLowerCase() : '';
   const scopes = parseAgentScopes(body?.scopes);
@@ -727,18 +1413,13 @@ app.post('/api/agent-credentials', async (c) => {
   ) {
     return c.json({ error: 'principal and a non-empty valid scopes array are required' }, 400);
   }
-  const created = await createAgentCredential(
-    c.env.DB,
-    manager.team_id,
-    c.get('owner'),
-    principal,
-    scopes,
-  );
+  const owner = c.get('owner');
+  const created = await createAgentCredential(c.env.DB, owner, principal, scopes);
   return c.json(
     {
       id: created.id,
       principal,
-      team: manager.team_id,
+      team: owner,
       scopes,
       createdAt: created.createdAt,
       credential: created.credential,
@@ -748,12 +1429,13 @@ app.post('/api/agent-credentials', async (c) => {
 });
 
 app.post('/api/agent-credentials/:id/rotate', async (c) => {
-  const manager = await requireCredentialManager(c);
-  if (manager instanceof Response) return manager;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
+  const owner = c.get('owner');
   const current = await c.env.DB.prepare(
     'SELECT c.id, c.team_id, i.principal, i.owner_principal, c.scopes_json FROM agent_credentials c JOIN agent_identities i ON i.id = c.agent_identity_id WHERE c.id = ? AND c.team_id = ? AND c.revoked_at IS NULL AND i.revoked_at IS NULL',
   )
-    .bind(c.req.param('id'), manager.team_id)
+    .bind(c.req.param('id'), owner)
     .first<AgentCredentialRow>();
   if (!current) return c.json({ error: 'agent credential not found' }, 404);
   const credential = `pantry_agent_${crypto.randomUUID()}${crypto.randomUUID()}`;
@@ -762,7 +1444,7 @@ app.post('/api/agent-credentials/:id/rotate', async (c) => {
   const updated = await c.env.DB.prepare(
     'UPDATE agent_credentials SET revoked_at = ?, rotated_at = ? WHERE id = ? AND team_id = ? AND revoked_at IS NULL',
   )
-    .bind(now, now, current.id, manager.team_id)
+    .bind(now, now, current.id, owner)
     .run();
   if ((updated.meta?.changes ?? 0) !== 1)
     return c.json({ error: 'agent credential was already rotated or revoked' }, 409);
@@ -782,13 +1464,13 @@ app.post('/api/agent-credentials/:id/rotate', async (c) => {
 });
 
 app.delete('/api/agent-credentials/:id', async (c) => {
-  const manager = await requireCredentialManager(c);
-  if (manager instanceof Response) return manager;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   const now = new Date().toISOString();
   const result = await c.env.DB.prepare(
     'UPDATE agent_credentials SET revoked_at = ? WHERE id = ? AND team_id = ? AND revoked_at IS NULL',
   )
-    .bind(now, c.req.param('id'), manager.team_id)
+    .bind(now, c.req.param('id'), c.get('owner'))
     .run();
   if ((result.meta?.changes ?? 0) !== 1)
     return c.json({ error: 'agent credential not found or already revoked' }, 404);
@@ -796,26 +1478,61 @@ app.delete('/api/agent-credentials/:id', async (c) => {
 });
 
 app.get('/api/session', async (c) => {
-  const membership = await requireAccessTeamMember(c, true);
-  if (membership instanceof Response) return membership;
-  if (!membership) return c.json({ error: 'Cloudflare Access session required' }, 401);
-  return c.json({ principal: c.get('owner'), team: membership.team_id, role: membership.role });
+  const authorization = c.get('workspaceAuthorization');
+  if (authorization) {
+    return c.json({
+      actor: {
+        id: authorization.actor.id,
+        kind: authorization.actor.kind,
+        displayEmail: authorization.actor.displayEmail,
+      },
+      workspace: authorization.workspace,
+      role: authorization.role,
+      capabilities: {
+        canWrite: hasWorkspaceRole(authorization.role, 'contributor'),
+        canReview: hasWorkspaceRole(authorization.role, 'reviewer'),
+        canManageMembers: hasWorkspaceRole(authorization.role, 'admin'),
+        canManageFolders: hasWorkspaceRole(authorization.role, 'admin'),
+      },
+    });
+  }
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
+  return c.json({ principal: identity, owner: c.get('owner') });
 });
 
 app.get('/api/approvals', async (c) => {
-  const membership = await requireAccessTeamMember(c);
-  if (membership instanceof Response) return membership;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   const rows = await c.env.DB.prepare(
-    "SELECT * FROM recipes WHERE owner = ? AND status = 'pending' AND reviewed_version IS NULL AND reviewed_digest IS NULL ORDER BY updated_at DESC",
+    "SELECT * FROM recipes WHERE owner = ? AND (status = 'pending' OR (status = 'enabled' AND approved_version IS NULL)) AND reviewed_version IS NULL AND reviewed_digest IS NULL ORDER BY updated_at DESC",
   )
     .bind(c.get('owner'))
     .all<RecipeRow>();
   return c.json({ recipes: (rows.results ?? []).map(listEntry) });
 });
 
+async function recordRecipeRetrieval(
+  db: D1Database,
+  owner: string,
+  name: string,
+): Promise<RecipeRow | null> {
+  const retrievedAt = new Date().toISOString();
+  await db
+    .prepare(
+      'UPDATE recipes SET run_count = COALESCE(run_count, 0) + 1, last_run_at = ? WHERE owner = ? AND name = ?',
+    )
+    .bind(retrievedAt, owner, name)
+    .run();
+  return db
+    .prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
+    .bind(owner, name)
+    .first<RecipeRow>();
+}
+
 app.get('/recipe/:name/approval-diff', async (c) => {
-  const membership = await requireAccessTeamMember(c);
-  if (membership instanceof Response) return membership;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   const owner = c.get('owner');
   const recipe = await c.env.DB.prepare('SELECT * FROM recipes WHERE owner = ? AND name = ?')
     .bind(owner, c.req.param('name'))
@@ -837,11 +1554,8 @@ app.get('/recipe/:name/approval-diff', async (c) => {
 app.post('/recipe/:name/approval', async (c) => {
   if (c.get('authKind') !== 'access')
     return c.json({ error: 'Cloudflare Access session required for approvals' }, 403);
-  const membership = await requireAccessTeamMember(c, true);
-  if (membership instanceof Response) return membership;
-  if (membership && membership.role !== 'owner' && membership.role !== 'approver') {
-    return c.json({ error: 'team approver or owner role required' }, 403);
-  }
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   try {
     const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
     const action = typeof body?.action === 'string' ? body.action : '';
@@ -870,7 +1584,8 @@ app.post('/recipe/:name/approval', async (c) => {
       .first<RecipeRow>();
     if (!recipe) return handleError(new RecipeError('NotFound', 'recipe not found'));
     if (
-      recipe.status !== 'pending' ||
+      (recipe.status !== 'pending' &&
+        !(recipe.status === 'enabled' && recipe.approved_version == null)) ||
       recipe.reviewed_version != null ||
       recipe.reviewed_digest != null
     ) {
@@ -882,7 +1597,7 @@ app.post('/recipe/:name/approval', async (c) => {
       return handleError(new RecipeError('Conflict', 'approval subject is stale'));
     }
     const createdAt = new Date().toISOString();
-    const actor = c.get('accessIdentity') ?? owner;
+    const actor = identity;
     const receiptDigest = await approvalReceiptDigest({
       owner,
       name: recipe.name,
@@ -907,7 +1622,7 @@ app.post('/recipe/:name/approval', async (c) => {
            WHERE EXISTS (
              SELECT 1 FROM recipes
              WHERE owner = ? AND name = ? AND version = ? AND recipe_digest = ?
-               AND status = 'pending' AND reviewed_version IS NULL AND reviewed_digest IS NULL
+               AND (status = 'pending' OR (status = 'enabled' AND approved_version IS NULL)) AND reviewed_version IS NULL AND reviewed_digest IS NULL
            )`,
       ).bind(
         receiptId,
@@ -931,7 +1646,7 @@ app.post('/recipe/:name/approval', async (c) => {
         `UPDATE recipes
            SET status = ?, approved_version = ?, approved_digest = ?, reviewed_version = ?, reviewed_digest = ?
            WHERE owner = ? AND name = ? AND version = ? AND recipe_digest = ?
-             AND status = 'pending' AND reviewed_version IS NULL AND reviewed_digest IS NULL`,
+             AND (status = 'pending' OR (status = 'enabled' AND approved_version IS NULL)) AND reviewed_version IS NULL AND reviewed_digest IS NULL`,
       ).bind(
         nextStatus,
         approvedVersion,
@@ -966,8 +1681,8 @@ app.post('/recipe/:name/approval', async (c) => {
 });
 
 app.get('/recipe/:name/approvals', async (c) => {
-  const membership = await requireAccessTeamMember(c);
-  if (membership instanceof Response) return membership;
+  const identity = requireAccessIdentity(c);
+  if (identity instanceof Response) return identity;
   const rows = await c.env.DB.prepare(
     'SELECT * FROM recipe_approval_receipts WHERE owner = ? AND recipe_name = ? ORDER BY created_at DESC',
   )
@@ -1054,7 +1769,8 @@ app.get('/recipe/:name', async (c) => {
     ) {
       return handleError(new RecipeError('Conflict', 'recipe is not an approved enabled version'));
     }
-    return c.json(fullRecipe(own));
+    const retrieved = await recordRecipeRetrieval(c.env.DB, owner, own.name);
+    return c.json(fullRecipe(retrieved ?? own));
   }
   const shared = await c.env.DB.prepare(
     "SELECT * FROM recipes WHERE visibility = 'shared' AND name = ? ORDER BY updated_at DESC LIMIT 1",
@@ -1074,7 +1790,8 @@ app.get('/recipe/:name', async (c) => {
   ) {
     return handleError(new RecipeError('Conflict', 'recipe is not an approved enabled version'));
   }
-  return c.json(fullRecipe(shared));
+  const retrieved = await recordRecipeRetrieval(c.env.DB, shared.owner, shared.name);
+  return c.json(fullRecipe(retrieved ?? shared));
 });
 
 // DELETE /recipe/:name — owner-scoped delete.
@@ -1104,4 +1821,4 @@ export default {
   },
 };
 
-export { app, timingSafeEqual, corsHeaders, parseAccessPrincipals, parseAccessTeams, isSameOrigin };
+export { app, timingSafeEqual, corsHeaders, isSameOrigin };

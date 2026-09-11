@@ -1,18 +1,19 @@
-// A tiny pantry client usable from terrarium, Pi, or a Worker.
-//
-// It reads PANTRY_URL + PANTRY_TOKEN from the environment by default. If either
-// is unset it fails soft: list() returns [], get()/push() throw a clear,
-// actionable error instead of making an unauthenticated request.
-//
-// The client only TRANSPORTS recipes. Deciding whether to run a fetched recipe,
-// and in what sandbox, is the caller's trust decision. See examples/run-recipe.ts.
-
 import type { FullRecipe, RecipeInput, RecipeListEntry } from './recipe.ts';
+
+export type PantryAuthentication =
+  | { kind: 'automation-token'; token: string }
+  | { kind: 'session'; headers: () => Record<string, string> };
+
+export type PantryAuthenticationKind = PantryAuthentication['kind'];
+
+export function automationTokenAuthentication(token: string): PantryAuthentication {
+  return { kind: 'automation-token', token };
+}
 
 export type PantryConfig = {
   url?: string;
   token?: string;
-  // Injectable for tests / Worker service bindings. Defaults to global fetch.
+  authentication?: PantryAuthentication;
   fetch?: typeof fetch;
 };
 
@@ -31,31 +32,39 @@ export type ApprovalResult = {
 
 export class PantryClient {
   private url: string | undefined;
-  private token: string | undefined;
+  private authentication: PantryAuthentication | undefined;
   private fetchImpl: typeof fetch;
 
   constructor(config: PantryConfig = {}) {
     const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
       ?.env;
+    const token = config.token ?? env?.PANTRY_TOKEN;
     this.url = (config.url ?? env?.PANTRY_URL)?.replace(/\/$/, '');
-    this.token = config.token ?? env?.PANTRY_TOKEN;
+    this.authentication =
+      config.authentication ?? (token ? automationTokenAuthentication(token) : undefined);
     this.fetchImpl = config.fetch ?? fetch;
   }
 
   get configured(): boolean {
-    return Boolean(this.url && this.token);
+    return Boolean(this.url && this.authentication);
+  }
+
+  get authenticationKind(): PantryAuthenticationKind | undefined {
+    return this.authentication?.kind;
   }
 
   private headers(): Record<string, string> {
-    return {
-      authorization: `Bearer ${this.token}`,
-      'content-type': 'application/json',
-    };
+    if (!this.authentication) throw new Error('pantry client: authentication is not configured');
+    const authenticationHeaders =
+      this.authentication.kind === 'automation-token'
+        ? { authorization: `Bearer ${this.authentication.token}` }
+        : this.authentication.headers();
+    return { ...authenticationHeaders, 'content-type': 'application/json' };
   }
 
   private require(): void {
     if (!this.url) throw new Error('pantry client: PANTRY_URL is not set');
-    if (!this.token) throw new Error('pantry client: PANTRY_TOKEN is not set');
+    if (!this.authentication) throw new Error('pantry client: authentication is not configured');
   }
 
   // Fail-soft: an unconfigured client lists nothing rather than erroring, so a

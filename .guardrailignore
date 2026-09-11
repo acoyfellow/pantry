@@ -1,0 +1,4 @@
+docs/employee-canary-manifest-receipt.md
+docs/employee-canary-manifest.json
+wrangler.ax.jsonc
+.pi/pantry-tool.ts

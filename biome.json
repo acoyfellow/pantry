@@ -15,6 +15,12 @@
   "javascript": {
     "formatter": { "quoteStyle": "single", "trailingCommas": "all", "semicolons": "always" }
   },
+  "overrides": [
+    {
+      "include": ["app-ui/src/App.svelte"],
+      "linter": { "rules": { "style": { "useConst": "off" } } }
+    }
+  ],
   "linter": {
     "enabled": true,
     "rules": {

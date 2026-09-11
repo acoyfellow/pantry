@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { readFileSync } from 'node:fs';
 import { runRecipe } from '../examples/run-recipe.ts';
-import { RUN_CAVEAT, describeError, makeClient } from './surface.ts';
+import { RUN_CAVEAT, browserSsoUnavailableMessage, describeError, makeClient } from './surface.ts';
 
 const HELP = `pantry — reuse capability-scoped recipes from any harness.
 
@@ -11,8 +11,13 @@ Usage:
   pantry run <name> [--input <json>|@file|-] [--json]
   pantry push <file.json> [--shared] [--json]
   pantry mcp                                 start the MCP server over stdio
+  pantry login                               explain browser SSO availability
 
-Config: PANTRY_URL defaults to https://pantry.coey.dev. PANTRY_TOKEN comes from env or ~/.terrarium/pantry-token.secret.
+Authentication:
+  Employee access uses the Pantry deployment browser management app and SSO.
+  Browser login/session handoff is not implemented in this CLI build.
+  For non-interactive automation, explicitly configure PANTRY_TOKEN or
+  ~/.terrarium/pantry-token.secret with a scoped credential.
 `;
 
 function has(flag: string): boolean {
@@ -53,6 +58,7 @@ export async function main(): Promise<void> {
     await runStdio();
     return;
   }
+  if (cmd === 'login') throw new Error(browserSsoUnavailableMessage());
   const { client, url } = makeClient();
   try {
     if (cmd === 'list') {

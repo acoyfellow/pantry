@@ -28,13 +28,12 @@ function workerFetch(env: Env): typeof fetch {
 describe('end-to-end: client -> worker -> runner', () => {
   test('push a recipe, GET it back with code, run it, get the recipe output', async () => {
     const db = new FakeD1();
-    db.teamMembers.push({ team_id: 'default-team', principal: 'default', role: 'owner' });
     const env: Env = {
       DB: db as unknown as D1Database,
       PANTRY_TOKEN: TOKEN,
       PANTRY_OWNER: 'default',
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'owner@example.com': 'default' }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ default: 'default-team' }),
+      PANTRY_SHARED_OWNER: 'default',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
     };
     const client = new PantryClient({
       url: 'https://pantry.test',
@@ -43,7 +42,7 @@ describe('end-to-end: client -> worker -> runner', () => {
     });
 
     // 1) client pushes the real sample slugify recipe through the worker.
-    const pushed = await client.push(sampleRecipe);
+    const pushed = await client.push({ ...sampleRecipe, status: 'pending' });
     const subject = { version: pushed.version, recipeDigest: pushed.recipeDigest };
     expect(pushed).toMatchObject({
       name: 'slugify',
@@ -68,6 +67,7 @@ describe('end-to-end: client -> worker -> runner', () => {
       env,
     );
     expect(approval.status).toBe(200);
+    expect(db.approvalReceipts[0]?.actor).toBe('owner@example.com');
 
     // 2) client GETs the full recipe back, including code, through the worker.
     const fetched = await client.get('slugify', 1);

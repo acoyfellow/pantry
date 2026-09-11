@@ -1,15 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { PantryClient } from './client.ts';
+import { PantryClient, automationTokenAuthentication } from './client.ts';
 
 export const DEFAULT_URL = 'https://pantry.coey.dev';
 export function tokenFile(): string {
-  const home = process.env.TERRARIUM_HOME || homedir();
-  return join(home, '.terrarium', 'pantry-token.secret');
+  const terrariumHome = process.env.TERRARIUM_HOME?.trim();
+  return terrariumHome
+    ? join(terrariumHome, 'pantry-token.secret')
+    : join(homedir(), '.terrarium', 'pantry-token.secret');
 }
 
-export function loadToken(): string | undefined {
+export function loadAutomationToken(): string | undefined {
   const fromEnv = process.env.PANTRY_TOKEN?.trim();
   if (fromEnv) return fromEnv;
   try {
@@ -18,6 +20,8 @@ export function loadToken(): string | undefined {
     return undefined;
   }
 }
+
+export const loadToken = loadAutomationToken;
 
 export function resolvedUrl(): string {
   return (process.env.PANTRY_URL?.trim() || DEFAULT_URL).replace(/\/$/, '');
@@ -58,14 +62,29 @@ export function describeError(err: unknown, url: string): string {
   ].join('\n');
 }
 
+export function browserSsoUnavailableMessage(url = resolvedUrl()): string {
+  return [
+    `Browser SSO login/session handoff is not implemented for the Pantry CLI at ${url}.`,
+    'Sign in to the Pantry deployment browser management app with SSO for employee access.',
+    `For non-interactive automation, explicitly configure PANTRY_TOKEN or ${tokenFile()} with a scoped credential.`,
+  ].join('\n');
+}
+
 export function makeClient(fetchImpl = makeFetch()): { client: PantryClient; url: string } {
   const url = resolvedUrl();
-  const token = loadToken();
+  const token = loadAutomationToken();
   if (!token)
     throw new Error(
-      `PANTRY_TOKEN is not set and ${tokenFile()} is empty/unreadable. Set PANTRY_TOKEN or write the token file. The token is never printed.`,
+      ['Pantry authentication is not configured.', browserSsoUnavailableMessage(url)].join('\n\n'),
     );
-  return { client: new PantryClient({ url, token, fetch: fetchImpl }), url };
+  return {
+    client: new PantryClient({
+      url,
+      authentication: automationTokenAuthentication(token),
+      fetch: fetchImpl,
+    }),
+    url,
+  };
 }
 
 export const RUN_CAVEAT =

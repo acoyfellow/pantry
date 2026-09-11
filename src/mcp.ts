@@ -14,10 +14,6 @@
 //   - capability tags are metadata a caller reasons about, not permissions
 //     pantry enforces.
 //
-// Config (env): PANTRY_URL (default https://pantry.coey.dev), PANTRY_TOKEN.
-// Run: `pantry mcp` (or `node bin/pantry-mcp`). The token is read from the
-// environment or ~/.terrarium/pantry-token.secret and is never logged.
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';

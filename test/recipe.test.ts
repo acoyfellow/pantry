@@ -23,7 +23,7 @@ describe('validateRecipeInput', () => {
     });
     expect(r.name).toBe('slugify');
     expect(r.capabilities).toEqual(['text.transform', 'z.b']);
-    expect(r.status).toBe('enabled');
+    expect(r.status).toBe('pending');
     expect(r.sourceRunId).toBeNull();
   });
 

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "employee-pantry-canary-manifest/v1",
+  "environment": {
+    "name": "Employee Pantry",
+    "baseUrl": "https://pantry.ax.cloudflare.dev",
+    "productionEndpointContacted": true,
+    "otherPantryEndpointsContacted": false
+  },
+  "collection": {
+    "status": "blocked",
+    "completedAt": "2026-08-17T09:19:21Z",
+    "readOnlyMethodsUsed": ["GET", "HEAD"],
+    "writeRequestsSent": 0,
+    "workerDataReadsCompleted": 0,
+    "accessEdgeResponses": [
+      {
+        "endpointClass": "health",
+        "method": "GET",
+        "httpStatus": 302,
+        "result": "Cloudflare Access login required before the Worker"
+      },
+      {
+        "endpointClass": "session",
+        "method": "HEAD",
+        "httpStatus": 302,
+        "result": "Cloudflare Access login required before the Worker"
+      },
+      {
+        "endpointClass": "recipe-discovery",
+        "method": "HEAD",
+        "httpStatus": 302,
+        "result": "Cloudflare Access login required before the Worker"
+      },
+      {
+        "endpointClass": "recipe-discovery-and-approval-history",
+        "method": "GET",
+        "httpStatus": 302,
+        "result": "Cloudflare Access login required before the Worker"
+      }
+    ],
+    "blocker": {
+      "type": "cloudflare-access-session-unavailable",
+      "exact": "The Employee Pantry Access edge returned HTTP 302 to the Cloudflare Access login flow for /health, /api/session, and /recipes before the Pantry Worker. No authenticated Employee Pantry Access browser session or scoped Employee Pantry read credential was available to this child. The agent-browser executable is not installed, so this child cannot initiate its own browser-based Access login.",
+      "remediation": "Run the same read-only collection from an authenticated Employee Pantry Access session, or provide a scoped Employee Pantry recipes:read credential through the child secret environment. Do not supply a browser cookie, Access assertion, or bearer credential in a manifest or receipt."
+    }
+  },
+  "recipes": {
+    "review_this_mr": {
+      "collectionStatus": "not-retrieved",
+      "current": {
+        "version": null,
+        "sourceDigest": null,
+        "inputSchemaDigest": null,
+        "capabilityDigest": null,
+        "capabilities": null,
+        "status": null,
+        "approvedVersion": null,
+        "approvedDigest": null,
+        "reviewedVersion": null,
+        "reviewedDigest": null,
+        "accessState": "unknown"
+      },
+      "immutableHistory": {
+        "versions": [],
+        "approvalReceipts": [],
+        "attestations": []
+      },
+      "usage": {
+        "retrievalCount": null,
+        "lastRetrievedAt": null,
+        "usageCount": null,
+        "lastUsageAt": null
+      },
+      "authorship": null
+    },
+    "reviews_todo": {
+      "collectionStatus": "not-retrieved",
+      "current": {
+        "version": null,
+        "sourceDigest": null,
+        "inputSchemaDigest": null,
+        "capabilityDigest": null,
+        "capabilities": null,
+        "status": null,
+        "approvedVersion": null,
+        "approvedDigest": null,
+        "reviewedVersion": null,
+        "reviewedDigest": null,
+        "accessState": "unknown"
+      },
+      "immutableHistory": {
+        "versions": [],
+        "approvalReceipts": [],
+        "attestations": []
+      },
+      "usage": {
+        "retrievalCount": null,
+        "lastRetrievedAt": null,
+        "usageCount": null,
+        "lastUsageAt": null
+      },
+      "authorship": null
+    }
+  },
+  "sanitization": {
+    "omitted": [
+      "authorization headers",
+      "bearer credentials",
+      "Cloudflare Access assertions",
+      "Cloudflare Access login URLs and query strings",
+      "session cookies",
+      "recipe source text"
+    ],
+    "sourceMaterialStored": false
+  }
+}

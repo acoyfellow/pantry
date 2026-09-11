@@ -64,6 +64,58 @@ type UsageReport = {
   reported_at: string;
 };
 
+type Actor = {
+  id: string;
+  kind: 'human' | 'agent' | 'system';
+  access_subject: string | null;
+  display_email_normalized: string | null;
+  status: 'active' | 'revoked' | 'disabled';
+};
+
+type Workspace = {
+  id: string;
+  slug: string;
+  display_name: string;
+  status: 'active' | 'disabled';
+};
+
+type WorkspaceMembership = {
+  id: string;
+  workspace_id: string;
+  actor_id: string;
+  role: 'reader' | 'contributor' | 'reviewer' | 'admin';
+  source: string;
+  valid_from: string;
+  valid_until: string | null;
+  revoked_at: string | null;
+};
+
+type Folder = {
+  id: string;
+  workspace_id: string;
+  parent_id: string | null;
+  slug: string;
+  display_name: string;
+  archived_at: string | null;
+};
+
+type FolderPermission = {
+  id: string;
+  folder_id: string;
+  subject_actor_id: string;
+  permission: 'read' | 'write' | 'review' | 'admin';
+  revoked_at: string | null;
+};
+
+type WorkspaceInvitation = {
+  id: string;
+  workspace_id: string;
+  target_access_subject: string;
+  role: 'contributor' | 'reviewer' | 'admin';
+  status: 'pending' | 'accepted' | 'revoked' | 'expired';
+  expires_at: string;
+};
+
 export class FakeD1 {
   rows: Row[] = [];
   usageReports: UsageReport[] = [];
@@ -75,6 +127,21 @@ export class FakeD1 {
   agentCredentials: AgentCredential[] = [];
   preparedSql: string[] = [];
   beforeRecipeUpsert?: () => Promise<void>;
+  actors: Actor[] = [];
+  workspaces: Workspace[] = [];
+  workspaceMemberships: WorkspaceMembership[] = [];
+  folders: Folder[] = [];
+  folderPermissions: FolderPermission[] = [];
+  workspaceInvitations: WorkspaceInvitation[] = [];
+  auditEvents: Record<string, unknown>[] = [];
+  recipeReleaseReviews: Array<{
+    id: string;
+    workspace_id: string;
+    recipe_id: string;
+    recipe_version: number;
+    recipe_digest: string;
+    action: string;
+  }> = [];
 
   prepare(sql: string) {
     const normalized = sql.replace(/\s+/g, ' ').trim();
@@ -102,6 +169,112 @@ class FakeStatement {
   }
 
   async first<T>(): Promise<T | null> {
+    if (
+      this.sql.startsWith('SELECT id, slug, display_name, status FROM workspaces WHERE slug = ?')
+    ) {
+      return (this.db.workspaces.find((workspace) => workspace.slug === this.args[0]) ??
+        null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        "SELECT id, display_email_normalized, status FROM actors WHERE kind = 'human' AND access_subject = ?",
+      )
+    ) {
+      return (this.db.actors.find(
+        (actor) => actor.kind === 'human' && actor.access_subject === this.args[0],
+      ) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT role FROM workspace_memberships WHERE workspace_id = ? AND actor_id = ?',
+      )
+    ) {
+      const [workspaceId, actorId] = this.args as [string, string];
+      return (this.db.workspaceMemberships.find(
+        (membership) =>
+          membership.workspace_id === workspaceId &&
+          membership.actor_id === actorId &&
+          membership.revoked_at === null &&
+          membership.valid_until === null,
+      ) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT id, workspace_id, parent_id, archived_at FROM folders WHERE id = ?',
+      )
+    ) {
+      return (this.db.folders.find((folder) => folder.id === this.args[0]) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT id, slug, display_name FROM folders WHERE id = ? AND archived_at IS NULL',
+      )
+    ) {
+      return (this.db.folders.find(
+        (folder) => folder.id === this.args[0] && folder.archived_at === null,
+      ) ?? null) as T | null;
+    }
+    if (this.sql.startsWith('SELECT id, kind, display_email_normalized FROM actors WHERE id = ?')) {
+      return (this.db.actors.find((actor) => actor.id === this.args[0]) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT * FROM recipes WHERE workspace_id = ? AND workspace_recipe_key = ? AND archived_at IS NULL',
+      )
+    ) {
+      const [workspaceId, recipeKey] = this.args as [string, string];
+      return (this.db.rows.find(
+        (row) =>
+          row.workspace_id === workspaceId &&
+          row.workspace_recipe_key === recipeKey &&
+          row.archived_at == null,
+      ) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT recipe_digest, description, input_schema_json, code, capabilities_json, source_run_id, visibility, tags_json, created_at FROM recipe_versions WHERE owner = ? AND recipe_name = ? AND recipe_version = ?',
+      )
+    ) {
+      const [owner, name, version] = this.args as [string, string, number];
+      return (this.db.recipeVersions.find(
+        (row) => row.owner === owner && row.recipe_name === name && row.recipe_version === version,
+      ) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        "SELECT id FROM recipe_release_reviews WHERE workspace_id = ? AND recipe_id = ? AND recipe_version = ? AND recipe_digest = ? AND action = 'approve'",
+      )
+    ) {
+      const [workspaceId, recipeId, version, digest] = this.args as [
+        string,
+        string,
+        number,
+        string,
+      ];
+      return (this.db.recipeReleaseReviews.find(
+        (review) =>
+          review.workspace_id === workspaceId &&
+          review.recipe_id === recipeId &&
+          review.recipe_version === version &&
+          review.recipe_digest === digest &&
+          review.action === 'approve',
+      ) ?? null) as T | null;
+    }
+    if (
+      this.sql.startsWith(
+        "SELECT id, role FROM workspace_invitations WHERE id = ? AND workspace_id = ? AND target_access_subject = ? AND status = 'pending'",
+      )
+    ) {
+      const [id, workspaceId, subject, now] = this.args as [string, string, string, string];
+      return (this.db.workspaceInvitations.find(
+        (invitation) =>
+          invitation.id === id &&
+          invitation.workspace_id === workspaceId &&
+          invitation.target_access_subject === subject &&
+          invitation.status === 'pending' &&
+          invitation.expires_at > now,
+      ) ?? null) as T | null;
+    }
     if (
       this.sql.startsWith(
         'SELECT c.id, c.team_id, i.principal, i.owner_principal, c.scopes_json FROM agent_credentials c JOIN agent_identities i',
@@ -207,6 +380,81 @@ class FakeStatement {
   async all<T>(): Promise<{ results: T[] }> {
     if (
       this.sql.startsWith(
+        'SELECT subject_actor_id, permission FROM folder_permissions WHERE folder_id = ? AND revoked_at IS NULL',
+      )
+    ) {
+      const [folderId] = this.args as [string];
+      return {
+        results: this.db.folderPermissions.filter(
+          (permission) => permission.folder_id === folderId && permission.revoked_at === null,
+        ) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT * FROM recipes WHERE workspace_id = ? AND folder_id = ? AND archived_at IS NULL ORDER BY updated_at DESC',
+      )
+    ) {
+      const [workspaceId, folderId] = this.args as [string, string];
+      return {
+        results: this.db.rows
+          .filter(
+            (row) =>
+              row.workspace_id === workspaceId &&
+              row.folder_id === folderId &&
+              row.archived_at == null,
+          )
+          .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT * FROM recipes WHERE workspace_id = ? AND archived_at IS NULL ORDER BY updated_at DESC',
+      )
+    ) {
+      const [workspaceId] = this.args as [string];
+      return {
+        results: this.db.rows
+          .filter((row) => row.workspace_id === workspaceId && row.archived_at == null)
+          .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT event_id, occurred_at, request_id, action, outcome, folder_id, recipe_id, recipe_version, recipe_digest, actor_id, actor_kind, reason_code, metadata_json FROM audit_events WHERE workspace_id = ?',
+      )
+    ) {
+      const [workspaceId] = this.args as [string];
+      return {
+        results: this.db.auditEvents
+          .filter((event) => event.workspace_id === workspaceId)
+          .sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at))) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT id, actor_id, role, source, valid_from, valid_until, revoked_at FROM workspace_memberships WHERE workspace_id = ?',
+      )
+    ) {
+      return {
+        results: this.db.workspaceMemberships.filter(
+          (membership) => membership.workspace_id === this.args[0],
+        ) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
+        'SELECT id, parent_id, slug, display_name, archived_at FROM folders WHERE workspace_id = ? AND archived_at IS NULL',
+      )
+    ) {
+      return {
+        results: this.db.folders.filter(
+          (folder) => folder.workspace_id === this.args[0] && folder.archived_at === null,
+        ) as T[],
+      };
+    }
+    if (
+      this.sql.startsWith(
         "SELECT * FROM recipes WHERE owner = ? AND status = 'pending' AND reviewed_version IS NULL AND reviewed_digest IS NULL ORDER BY updated_at DESC",
       )
     ) {
@@ -260,6 +508,135 @@ class FakeStatement {
   }
 
   async run(): Promise<{ meta: { changes: number } }> {
+    if (this.sql.startsWith('INSERT INTO actors')) {
+      const [id, subject, email] = this.args as [string, string, string | null];
+      if (this.db.actors.some((actor) => actor.access_subject === subject))
+        return { meta: { changes: 0 } };
+      this.db.actors.push({
+        id,
+        kind: 'human',
+        access_subject: subject,
+        display_email_normalized: email,
+        status: 'active',
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO workspace_memberships')) {
+      const [id, workspaceId, actorId, role, source, validFrom] = this.args as [
+        string,
+        string,
+        string,
+        WorkspaceMembership['role'],
+        string,
+        string,
+      ];
+      if (
+        this.db.workspaceMemberships.some(
+          (membership) =>
+            membership.workspace_id === workspaceId &&
+            membership.actor_id === actorId &&
+            membership.revoked_at === null &&
+            membership.valid_until === null,
+        )
+      )
+        return { meta: { changes: 0 } };
+      this.db.workspaceMemberships.push({
+        id,
+        workspace_id: workspaceId,
+        actor_id: actorId,
+        role,
+        source,
+        valid_from: validFrom,
+        valid_until: null,
+        revoked_at: null,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO folders')) {
+      const [id, workspaceId, parentId, slug, displayName] = this.args as [
+        string,
+        string,
+        string | null,
+        string,
+        string,
+      ];
+      if (
+        this.db.folders.some(
+          (folder) =>
+            folder.workspace_id === workspaceId &&
+            folder.parent_id === parentId &&
+            folder.slug === slug,
+        )
+      )
+        return { meta: { changes: 0 } };
+      this.db.folders.push({
+        id,
+        workspace_id: workspaceId,
+        parent_id: parentId,
+        slug,
+        display_name: displayName,
+        archived_at: null,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO workspace_invitations')) {
+      const [id, workspaceId, subject, role, , expiresAt] = this.args as [
+        string,
+        string,
+        string,
+        WorkspaceInvitation['role'],
+        string,
+        string,
+      ];
+      if (
+        this.db.workspaceInvitations.some(
+          (invitation) =>
+            invitation.workspace_id === workspaceId &&
+            invitation.target_access_subject === subject &&
+            invitation.role === role &&
+            invitation.status === 'pending',
+        )
+      )
+        return { meta: { changes: 0 } };
+      this.db.workspaceInvitations.push({
+        id,
+        workspace_id: workspaceId,
+        target_access_subject: subject,
+        role,
+        status: 'pending',
+        expires_at: expiresAt,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith("UPDATE workspace_invitations SET status = 'accepted'")) {
+      const [, , id] = this.args as [string, string, string];
+      const invitation = this.db.workspaceInvitations.find(
+        (candidate) => candidate.id === id && candidate.status === 'pending',
+      );
+      if (!invitation) return { meta: { changes: 0 } };
+      invitation.status = 'accepted';
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO audit_events')) {
+      this.db.auditEvents.push({
+        event_id: this.args[0],
+        occurred_at: this.args[1],
+        request_id: this.args[2],
+        action: this.args[3],
+        outcome: 'allowed',
+        workspace_id: this.args[4],
+        folder_id: this.args[5],
+        recipe_id: this.args[6],
+        recipe_version: this.args[7],
+        recipe_digest: this.args[8],
+        actor_id: this.args[9],
+        actor_kind: 'human',
+        access_subject_snapshot: this.args[10],
+        reason_code: 'authorized',
+        metadata_json: this.args[13],
+      });
+      return { meta: { changes: 1 } };
+    }
     if (this.sql.startsWith('INSERT INTO agent_identities')) {
       const [id, team_id, principal, owner_principal, created_at] = this.args as [
         string,
@@ -331,6 +708,81 @@ class FakeStatement {
         revoked_at: null,
         rotated_at: null,
       });
+      return { meta: { changes: 1 } };
+    }
+    if (this.sql.startsWith('INSERT INTO recipe_release_reviews')) {
+      const [id, workspaceId, recipeId, version, digest, , , , action] = this.args as [
+        string,
+        string,
+        string,
+        number,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ];
+      if (
+        this.db.recipeReleaseReviews.some(
+          (review) =>
+            review.recipe_id === recipeId &&
+            review.recipe_version === version &&
+            review.recipe_digest === digest &&
+            (review.action === 'approve' || review.action === 'reject'),
+        )
+      )
+        return { meta: { changes: 0 } };
+      this.db.recipeReleaseReviews.push({
+        id,
+        workspace_id: workspaceId,
+        recipe_id: recipeId,
+        recipe_version: version,
+        recipe_digest: digest,
+        action,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (
+      this.sql.startsWith(
+        'UPDATE recipes SET status = ?, approved_version = ?, approved_digest = ?, reviewed_version = ?, reviewed_digest = ?',
+      ) &&
+      this.sql.includes('WHERE id = ? AND workspace_id = ?')
+    ) {
+      const [
+        status,
+        approvedVersion,
+        approvedDigest,
+        reviewedVersion,
+        reviewedDigest,
+        id,
+        workspaceId,
+        version,
+        digest,
+      ] = this.args as [
+        RecipeRow['status'],
+        number | null,
+        string | null,
+        number,
+        string,
+        string,
+        string,
+        number,
+        string,
+      ];
+      const row = this.db.rows.find(
+        (candidate) =>
+          candidate.id === id &&
+          candidate.workspace_id === workspaceId &&
+          candidate.version === version &&
+          candidate.recipe_digest === digest &&
+          candidate.status === 'pending',
+      );
+      if (!row) return { meta: { changes: 0 } };
+      row.status = status;
+      row.approved_version = approvedVersion;
+      row.approved_digest = approvedDigest;
+      row.reviewed_version = reviewedVersion;
+      row.reviewed_digest = reviewedDigest;
       return { meta: { changes: 1 } };
     }
     if (this.sql.startsWith('INSERT INTO recipe_approval_receipts')) {
@@ -457,6 +909,88 @@ class FakeStatement {
       });
       return { meta: { changes: 1 } };
     }
+    if (this.sql.startsWith('INSERT INTO recipes') && this.sql.includes('workspace_recipe_key')) {
+      const [
+        id,
+        owner,
+        name,
+        description,
+        inputSchemaJson,
+        code,
+        capabilitiesJson,
+        version,
+        sourceRunId,
+        visibility,
+        tagsJson,
+        recipeDigest,
+        createdAt,
+        updatedAt,
+        workspaceId,
+        folderId,
+        createdByActorId,
+        updatedByActorId,
+        legacyOwner,
+        workspaceRecipeKey,
+        expectedVersion,
+      ] = this.args as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        number,
+        string | null,
+        RecipeRow['visibility'],
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        number,
+      ];
+      const existing = this.db.rows.find((row) => row.owner === owner && row.name === name);
+      if (existing && existing.version !== expectedVersion) return { meta: { changes: 0 } };
+      const next: Row = {
+        id: existing?.id ?? id,
+        owner,
+        name,
+        description,
+        input_schema_json: inputSchemaJson,
+        code,
+        capabilities_json: capabilitiesJson,
+        status: 'pending',
+        version,
+        source_run_id: sourceRunId,
+        visibility,
+        tags_json: tagsJson,
+        run_count: existing?.run_count ?? 0,
+        last_run_at: existing?.last_run_at ?? null,
+        recipe_digest: recipeDigest,
+        approved_version: null,
+        approved_digest: null,
+        reviewed_version: null,
+        reviewed_digest: null,
+        workspace_id: workspaceId,
+        folder_id: folderId,
+        created_by_actor_id: existing?.created_by_actor_id ?? createdByActorId,
+        updated_by_actor_id: updatedByActorId,
+        legacy_owner: existing?.legacy_owner ?? legacyOwner,
+        workspace_recipe_key: workspaceRecipeKey,
+        archived_at: null,
+        created_at: existing?.created_at ?? createdAt,
+        updated_at: updatedAt,
+      };
+      if (existing) Object.assign(existing, next);
+      else this.db.rows.push(next);
+      return { meta: { changes: 1 } };
+    }
     if (this.sql.startsWith('INSERT INTO recipes')) {
       await this.db.beforeRecipeUpsert?.();
       const [
@@ -516,30 +1050,10 @@ class FakeStatement {
         run_count: existing?.run_count ?? run_count,
         last_run_at: existing?.last_run_at ?? last_run_at,
         recipe_digest,
-        approved_version:
-          existing?.approved_version === undefined
-            ? undefined
-            : status === 'pending'
-              ? null
-              : existing.approved_version,
-        approved_digest:
-          existing?.approved_digest === undefined
-            ? undefined
-            : status === 'pending'
-              ? null
-              : existing.approved_digest,
-        reviewed_version:
-          existing?.reviewed_version === undefined
-            ? undefined
-            : status === 'pending'
-              ? null
-              : existing.reviewed_version,
-        reviewed_digest:
-          existing?.reviewed_digest === undefined
-            ? undefined
-            : status === 'pending'
-              ? null
-              : existing.reviewed_digest,
+        approved_version: existing?.approved_version === undefined ? undefined : null,
+        approved_digest: existing?.approved_digest === undefined ? undefined : null,
+        reviewed_version: existing?.reviewed_version === undefined ? undefined : null,
+        reviewed_digest: existing?.reviewed_digest === undefined ? undefined : null,
         created_at,
         updated_at,
       };
@@ -594,7 +1108,10 @@ class FakeStatement {
       this.db.usageReports.push({ id, owner, recipe_name, reporter, version, reported_at });
       return { meta: { changes: 1 } };
     }
-    if (this.sql.startsWith('UPDATE recipes SET run_count = run_count + 1')) {
+    if (
+      this.sql.startsWith('UPDATE recipes SET run_count = run_count + 1') ||
+      this.sql.startsWith('UPDATE recipes SET run_count = COALESCE(run_count, 0) + 1')
+    ) {
       const [, owner, name] = this.args as [string, string, string];
       const row = this.db.rows.find((r) => r.owner === owner && r.name === name);
       if (!row) return { meta: { changes: 0 } };

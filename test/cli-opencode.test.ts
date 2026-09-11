@@ -178,7 +178,7 @@ describe('CLI surface', () => {
     expect(JSON.parse(logs[1]).result).toMatchObject({ ok: true, output: 'OK' });
   });
 
-  test('no-token error is clear when no env or token file exists', async () => {
+  test('missing automation credentials explain the unavailable browser SSO handoff', async () => {
     rmSync(emptyHome, { recursive: true, force: true });
     mkdirSync(emptyHome, { recursive: true });
     process.env.PANTRY_TOKEN = '';
@@ -186,8 +186,19 @@ describe('CLI surface', () => {
     process.env.TERRARIUM_HOME = emptyHome;
     const { makeClient } = await import('../src/surface.ts');
     expect(() => makeClient(fakeFetch(async () => Response.json({})))).toThrow(
-      /PANTRY_TOKEN is not set/,
+      /Browser SSO login\/session handoff is not implemented/,
     );
+  });
+
+  test('login fails with the browser SSO boundary instead of requesting a token', async () => {
+    const originalArgv = process.argv;
+    try {
+      process.argv = ['bun', 'pantry', 'login'];
+      const { main } = await import('../src/cli.ts');
+      await expect(main()).rejects.toThrow(/Browser SSO login\/session handoff is not implemented/);
+    } finally {
+      process.argv = originalArgv;
+    }
   });
 });
 

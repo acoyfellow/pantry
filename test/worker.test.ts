@@ -92,10 +92,12 @@ describe('auth gate (fail-closed)', () => {
     expect(health).toEqual({ ok: true, service: 'pantry' });
   });
 
-  test('missing Access identity is unauthorized when Access is the configured boundary', async () => {
+  test('missing Access identity is unauthorized when Access sharing is configured', async () => {
     const env: Env = {
       DB: new FakeD1() as unknown as D1Database,
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'operator' }),
+      PANTRY_SHARED_OWNER: 'agent-experience',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
+      PANTRY_ACCESS_ONLY: 'true',
     };
     const res = await app.fetch(req('/api/session', {}, false), env);
     expect(res.status).toBe(401);
@@ -105,60 +107,78 @@ describe('auth gate (fail-closed)', () => {
     const env: Env = {
       DB: new FakeD1() as unknown as D1Database,
       PANTRY_TOKEN: TOKEN,
+      PANTRY_SHARED_OWNER: 'agent-experience',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
       PANTRY_ACCESS_ONLY: 'true',
     };
     const res = await app.fetch(req('/recipes'), env);
     expect(res.status).toBe(401);
   });
 
-  test('unknown Access identity is rejected', async () => {
+  test('Access share-all admits every Access identity to the shared owner without D1 membership', async () => {
+    const db = new FakeD1();
     const env: Env = {
-      DB: new FakeD1() as unknown as D1Database,
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'operator' }),
+      DB: db as unknown as D1Database,
+      PANTRY_SHARED_OWNER: 'agent-experience',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
+      PANTRY_ACCESS_ONLY: 'true',
     };
-    const res = await app.fetch(
-      new Request('https://pantry.test/api/session', {
-        headers: {
-          origin: 'https://pantry.test',
-          'cf-access-authenticated-user-email': 'intruder@example.com',
-        },
+    const authorHeaders = {
+      origin: 'https://pantry.test',
+      'cf-access-authenticated-user-email': 'author@cloudflare.com',
+      'content-type': 'application/json',
+    };
+    const created = await app.fetch(
+      new Request('https://pantry.test/recipes', {
+        method: 'POST',
+        headers: authorHeaders,
+        body: JSON.stringify(sample),
       }),
       env,
     );
-    expect(res.status).toBe(401);
-  });
+    const subject = (await created.json()) as { version: number; recipeDigest: string };
+    expect(created.status).toBe(201);
+    expect(db.rows[0]?.owner).toBe('agent-experience');
 
-  test('authorized Access team member receives a stable session principal and is same-origin only', async () => {
-    const db = new FakeD1();
-    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
-    const env: Env = {
-      DB: db as unknown as D1Database,
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'workspace-owner' }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+    const reviewerHeaders = {
+      origin: 'https://pantry.test',
+      'cf-access-authenticated-user-email': 'Reviewer@Cloudflare.com',
     };
-    const request = new Request('https://pantry.test/api/session', {
-      headers: {
-        origin: 'https://pantry.test',
-        'cf-access-authenticated-user-email': 'operator@example.com',
-      },
+    const session = await app.fetch(
+      new Request('https://pantry.test/api/session', { headers: reviewerHeaders }),
+      env,
+    );
+    expect(await session.json()).toEqual({
+      principal: 'Reviewer@Cloudflare.com',
+      owner: 'agent-experience',
     });
-    const session = await app.fetch(request, env);
-    expect(session.status).toBe(200);
-    const sessionBody = (await session.json()) as {
-      principal: string;
-      team: string;
-      role: string;
-    };
-    expect(sessionBody).toEqual({
-      principal: 'workspace-owner',
-      team: 'workspace',
-      role: 'owner',
+    const recipes = await app.fetch(
+      new Request('https://pantry.test/recipes', { headers: reviewerHeaders }),
+      env,
+    );
+    expect(
+      (await recipes.json()) as { scope: string; recipes: Array<{ name: string; author: string }> },
+    ).toEqual({
+      scope: 'owner',
+      recipes: [expect.objectContaining({ name: 'slugify', author: 'agent-experience' })],
     });
+    const approval = await app.fetch(
+      new Request('https://pantry.test/recipe/slugify/approval', {
+        method: 'POST',
+        headers: { ...reviewerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', ...subject }),
+      }),
+      env,
+    );
+    expect(approval.status).toBe(200);
+    expect(db.approvalReceipts[0]?.actor).toBe('Reviewer@Cloudflare.com');
+    expect(db.preparedSql.some((sql) => sql.includes('team_members'))).toBe(false);
+
     const crossOrigin = await app.fetch(
       new Request('https://pantry.test/api/session', {
         headers: {
           origin: 'https://other.test',
-          'cf-access-authenticated-user-email': 'operator@example.com',
+          'cf-access-authenticated-user-email': 'reviewer@cloudflare.com',
         },
       }),
       env,
@@ -166,31 +186,13 @@ describe('auth gate (fail-closed)', () => {
     expect(crossOrigin.status).toBe(403);
   });
 
-  test('Access principals require a configured database team membership', async () => {
-    const env: Env = {
-      DB: new FakeD1() as unknown as D1Database,
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'operator@example.com': 'workspace-owner' }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
-    };
-    const session = await app.fetch(
-      new Request('https://pantry.test/api/session', {
-        headers: {
-          origin: 'https://pantry.test',
-          'cf-access-authenticated-user-email': 'operator@example.com',
-        },
-      }),
-      env,
-    );
-    expect(session.status).toBe(403);
-  });
-
   test('agent credentials are hashed, scoped, and blocked from management routes', async () => {
     const db = new FakeD1();
-    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
     const env: Env = {
       DB: db as unknown as D1Database,
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'owner@example.com': 'workspace-owner' }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+      PANTRY_SHARED_OWNER: 'agent-experience',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
+      PANTRY_ACCESS_ONLY: 'true',
     };
     const accessHeaders = {
       origin: 'https://pantry.test',
@@ -294,74 +296,54 @@ describe('auth gate (fail-closed)', () => {
     expect(response.status).toBe(403);
   });
 
-  test('team members may review approvals but only approvers and owners may decide', async () => {
+  test('management approval diffs do not record retrievals, while full recipe fetches do', async () => {
     const db = new FakeD1();
-    db.teamMembers.push(
-      { team_id: 'workspace', principal: 'reviewer', role: 'member' },
-      { team_id: 'workspace', principal: 'approver', role: 'approver' },
-    );
     const env: Env = {
-      ...makeEnvForDb(db, 'workspace-owner'),
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({
-        'reviewer@example.com': 'reviewer',
-        'approver@example.com': 'approver',
-      }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ reviewer: 'workspace', approver: 'workspace' }),
+      ...makeEnvForDb(db, 'reviewer'),
+      PANTRY_SHARED_OWNER: 'reviewer',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
     };
-    await app.fetch(req('/recipes', { method: 'POST', body: JSON.stringify(sample) }), {
-      ...env,
-      PANTRY_OWNER: 'approver',
-    });
-    const reviewerHeaders = {
-      origin: 'https://pantry.test',
-      'cf-access-authenticated-user-email': 'reviewer@example.com',
-    };
-    const queue = await app.fetch(
-      new Request('https://pantry.test/api/approvals', { headers: reviewerHeaders }),
-      env,
-    );
-    expect(queue.status).toBe(200);
-    const denied = await app.fetch(
-      new Request('https://pantry.test/recipe/slugify/approval', {
+    const created = await app.fetch(
+      req('/recipes', {
         method: 'POST',
-        headers: { ...reviewerHeaders, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'approve',
-          version: db.rows[0]?.version,
-          recipeDigest: db.rows[0]?.recipe_digest,
-        }),
+        body: JSON.stringify({ ...sample, status: 'enabled' }),
       }),
       env,
     );
-    expect(denied.status).toBe(403);
-    const approved = await app.fetch(
-      new Request('https://pantry.test/recipe/slugify/approval', {
-        method: 'POST',
+    expect(created.status).toBe(201);
+
+    const diff = await app.fetch(
+      new Request('https://pantry.test/recipe/slugify/approval-diff', {
         headers: {
           origin: 'https://pantry.test',
-          'cf-access-authenticated-user-email': 'approver@example.com',
-          'content-type': 'application/json',
+          'cf-access-authenticated-user-email': 'reviewer@example.com',
         },
-        body: JSON.stringify({
-          action: 'approve',
-          version: db.rows[0]?.version,
-          recipeDigest: db.rows[0]?.recipe_digest,
-        }),
       }),
       env,
     );
-    expect(approved.status).toBe(200);
-    expect(db.approvalReceipts[0]?.actor).toBe('approver@example.com');
+    expect(diff.status).toBe(200);
+    expect(
+      (await diff.json()) as { current: { retrievalCount: number; lastRetrievedAt: null } },
+    ).toMatchObject({
+      current: { retrievalCount: 0, lastRetrievedAt: null },
+    });
+    expect(db.rows[0]).toMatchObject({ run_count: 0, last_run_at: null });
+
+    const fetched = await app.fetch(req('/recipe/slugify'), env);
+    expect(fetched.status).toBe(200);
+    expect((await fetched.json()) as { retrievalCount: number }).toMatchObject({
+      retrievalCount: 1,
+    });
+    expect(db.rows[0]).toMatchObject({ run_count: 1, last_run_at: expect.any(String) });
   });
 });
 
 describe('collaborative approval hardening', () => {
   function makeApprovalEnv(db: FakeD1): Env {
-    db.teamMembers.push({ team_id: 'workspace', principal: 'workspace-owner', role: 'owner' });
     return {
       ...makeEnvForDb(db, 'workspace-owner'),
-      PANTRY_ACCESS_PRINCIPALS: JSON.stringify({ 'owner@example.com': 'workspace-owner' }),
-      PANTRY_ACCESS_TEAMS: JSON.stringify({ 'workspace-owner': 'workspace' }),
+      PANTRY_SHARED_OWNER: 'workspace-owner',
+      PANTRY_ACCESS_SHARE_ALL: 'true',
     };
   }
 
@@ -790,7 +772,7 @@ describe('routes round-trip', () => {
     const again = await app.fetch(
       req('/recipes', {
         method: 'POST',
-        body: JSON.stringify({ ...sample, description: 'updated description' }),
+        body: JSON.stringify({ ...sample, description: 'updated description', status: 'enabled' }),
       }),
       env,
     );
@@ -802,9 +784,50 @@ describe('routes round-trip', () => {
     });
 
     const get = await app.fetch(req('/recipe/slugify'), env);
-    const full = (await get.json()) as { version: number; description: string };
-    expect(full.version).toBe(2);
-    expect(full.description).toBe('updated description');
+    const full = (await get.json()) as { version: number; description: string; status: string };
+    expect(full).toMatchObject({
+      version: 2,
+      description: 'updated description',
+      status: 'enabled',
+    });
+  });
+
+  test('successful full retrievals record count and timestamp while enabled saves retain status', async () => {
+    await app.fetch(
+      req('/recipes', { method: 'POST', body: JSON.stringify({ ...sample, status: 'enabled' }) }),
+      env,
+    );
+    const first = (await (await app.fetch(req('/recipe/slugify'), env)).json()) as {
+      runCount: number;
+      retrievalCount: number;
+      lastRetrievedAt: string | null;
+    };
+    expect(first.runCount).toBe(1);
+    expect(first.retrievalCount).toBe(1);
+    expect(first.lastRetrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    const saved = await app.fetch(
+      req('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ ...sample, description: 'enabled revision', status: 'enabled' }),
+      }),
+      env,
+    );
+    expect(await saved.json()).toMatchObject({ version: 2 });
+    expect(env.DB instanceof FakeD1 && env.DB.rows[0]).toMatchObject({
+      status: 'enabled',
+      version: 2,
+      run_count: 1,
+    });
+
+    const second = (await (await app.fetch(req('/recipe/slugify'), env)).json()) as {
+      runCount: number;
+      retrievalCount: number;
+      lastRetrievedAt: string | null;
+    };
+    expect(second.runCount).toBe(2);
+    expect(second.retrievalCount).toBe(2);
+    expect(second.lastRetrievedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   test('invalid recipe => 400', async () => {

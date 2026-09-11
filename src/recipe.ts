@@ -36,6 +36,13 @@ export type RecipeRow = {
   approved_digest?: string | null;
   reviewed_version?: number | null;
   reviewed_digest?: string | null;
+  workspace_id?: string | null;
+  folder_id?: string | null;
+  created_by_actor_id?: string | null;
+  updated_by_actor_id?: string | null;
+  legacy_owner?: string | null;
+  workspace_recipe_key?: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -179,7 +186,7 @@ export function lintRecipeCode(code: string): string[] {
   return warnings;
 }
 
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   const object = value as Record<string, unknown>;
@@ -189,7 +196,7 @@ function canonicalJson(value: unknown): string {
     .join(',')}}`;
 }
 
-async function sha256Hex(value: string): Promise<string> {
+export async function sha256Hex(value: string): Promise<string> {
   const bytes = new Uint8Array(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)),
   );
@@ -228,15 +235,15 @@ export function validateRecipeInput(input: unknown): RecipeInput {
   const capabilities = cleanCapabilities(body.capabilities);
   const tags = cleanTags(body.tags);
   const status: RecipeStatus =
-    body.status === 'pending'
-      ? 'pending'
+    body.status === 'enabled'
+      ? 'enabled'
       : body.status === 'disabled'
         ? 'disabled'
         : body.status === 'rejected'
           ? 'rejected'
           : body.status === 'superseded'
             ? 'superseded'
-            : 'enabled';
+            : 'pending';
   const visibility: RecipeVisibility = body.visibility === 'shared' ? 'shared' : 'private';
   const sourceRunId =
     typeof body.sourceRunId === 'string' && body.sourceRunId.trim()
@@ -271,7 +278,10 @@ export function listEntry(row: RecipeRow) {
     tags: JSON.parse(row.tags_json || '[]') as string[],
     runCount: row.run_count ?? 0,
     lastRunAt: row.last_run_at ?? null,
+    retrievalCount: row.run_count ?? 0,
+    lastRetrievedAt: row.last_run_at ?? null,
     shareCandidate: (row.visibility ?? 'private') === 'private' && (row.run_count ?? 0) >= 5,
+    createdAt: row.created_at,
     updatedAt: row.updated_at,
     recipeDigest: row.recipe_digest ?? null,
     ...(row.approved_version !== undefined
@@ -305,6 +315,9 @@ export type RecipeListEntry = Omit<
   | 'recipeDigest'
   | 'approvedVersion'
   | 'approvedDigest'
+  | 'createdAt'
+  | 'retrievalCount'
+  | 'lastRetrievedAt'
 > &
   Partial<
     Pick<
@@ -318,6 +331,9 @@ export type RecipeListEntry = Omit<
       | 'recipeDigest'
       | 'approvedVersion'
       | 'approvedDigest'
+      | 'createdAt'
+      | 'retrievalCount'
+      | 'lastRetrievedAt'
     >
   >;
 export type FullRecipe = Omit<
@@ -331,6 +347,8 @@ export type FullRecipe = Omit<
   | 'recipeDigest'
   | 'approvedVersion'
   | 'approvedDigest'
+  | 'retrievalCount'
+  | 'lastRetrievedAt'
 > &
   Partial<
     Pick<
@@ -344,5 +362,7 @@ export type FullRecipe = Omit<
       | 'recipeDigest'
       | 'approvedVersion'
       | 'approvedDigest'
+      | 'retrievalCount'
+      | 'lastRetrievedAt'
     >
   >;
